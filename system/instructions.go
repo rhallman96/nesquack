@@ -377,7 +377,7 @@ func cld(c *cpu, bus memoryDevice, a uint16) error {
 }
 
 func cli(c *cpu, bus memoryDevice, a uint16) error {
-	c.setFlagValue(flagDisableIRQ, false)
+	c.setFlagValue(flagInterrupt, false)
 	return nil
 }
 
@@ -708,7 +708,7 @@ func sed(c *cpu, bus memoryDevice, a uint16) error {
 }
 
 func sei(c *cpu, bus memoryDevice, a uint16) error {
-	c.setFlag(flagDisableIRQ)
+	c.setFlag(flagInterrupt)
 	return nil
 }
 

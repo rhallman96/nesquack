@@ -10,7 +10,9 @@ type cpu struct {
 	pc             uint16
 	a, x, y, p, sp uint8
 	clock          uint64
-	irq, nmi       bool
+
+	// nmi is falling edge sensitive
+	irq, nmi bool
 }
 
 const (
@@ -37,7 +39,7 @@ const (
 )
 
 // step performs the next instruction in memory and returns how many cycles
-// it took to execute
+// it took to execute.
 func (c *cpu) step(bus memoryDevice) error {
 	// fetch the next opcode
 	op, err := bus.read(c.pc)

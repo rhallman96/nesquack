@@ -1,0 +1,141 @@
+package system
+
+import (
+	"errors"
+	"fmt"
+	"reflect"
+)
+
+var (
+	inesPrefix = []uint8{0x4e, 0x45, 0x53, 0x1a}
+)
+
+const (
+	prgROMSizeUnit = 0x4000 // 16 KB
+	prgRAMSizeUnit = 0x2000 // 8 KB
+	chrROMSizeUnit = 0x2000
+	headerSize     = 0x10
+	trainerSize    = 0x200
+
+	nromHeader = 0x00
+)
+
+type cartridge interface {
+	memoryDevice
+	readCHR(a uint16) (uint8, error)
+	writeCHR(a uint16, v uint8) error
+	ciramMirror() mirror
+}
+
+func isBitSet(flag, bit uint8) bool {
+	return (flag & (1 << bit)) != 0
+}
+
+// createCartridge creates a cartridge based on the ROM's raw binary data.
+// The cartridge header is assumed to be in the iNES format (NES 2.0 is not
+// currently supported).
+func createCartridge(data []uint8) (cartridge, error) {
+	// load iNES flags
+	if !reflect.DeepEqual(data[:4], inesPrefix) {
+		return nil, errors.New("rom is not in iNES format")
+	}
+	prgROMSize := int(data[4]) * prgROMSizeUnit
+	chrROMSize := int(data[5]) * chrROMSizeUnit
+	mapper := (data[7] & 0xf0) | (data[6] >> 4)
+
+	hMirror := isBitSet(data[6], 0)
+	// hasBattery := isBitSet(data[6], 1)
+	hasTrainer := isBitSet(data[6], 2)
+	ignoreMirror := isBitSet(data[6], 3)
+
+	var ciMirror mirror = noMirror
+	if !ignoreMirror {
+		if hMirror {
+			ciMirror = horizontal
+		} else {
+			ciMirror = vertical
+		}
+	}
+
+	// initialize prgROM, prgRAM, and CHR
+	prgRAMSize := int(data[8]) * prgRAMSizeUnit
+	if prgRAMSize == 0 {
+		prgRAMSize = prgRAMSizeUnit
+	}
+
+	prgROMIndex := headerSize
+	if hasTrainer {
+		prgROMIndex += trainerSize
+	}
+	chrROMIndex := prgROMIndex + chrROMSize
+	prgROM := data[prgROMIndex : prgROMIndex+prgROMSize]
+	prgRAM := make([]uint8, prgRAMSize, prgRAMSize)
+	chrROM := data[chrROMIndex : chrROMIndex+chrROMSize]
+
+	// create a cartridge corresponding to iNES metadata
+	var c cartridge
+
+	switch mapper {
+	case nromHeader:
+		c = &nrom{
+			prgROM: prgROM,
+			prgRAM: prgRAM,
+			chr:    chrROM,
+			mirror: ciMirror,
+		}
+	default:
+		return nil, errors.New(fmt.Sprintf("unsupported iNES mapper 0x%x", mapper))
+	}
+
+	return c, nil
+}
+
+// nrom CPU banks
+// 0x6000 - 0x7fff: prg RAM, mirrored if necessary
+// 0x8000 - 0xbfff: first bank of prg ROM
+// 0xc000 - 0xffff: second bank of prg ROM (or mirror of first bank)
+type nrom struct {
+	prgROM []uint8
+	prgRAM []uint8
+	chr    []uint8
+
+	mirror mirror
+}
+
+func (c *nrom) read(a uint16) (uint8, error) {
+	if a >= 0x6000 && a < 0x8000 {
+		i := mirrorIndex(a, 0x6000, uint16(len(c.prgRAM)))
+		return c.prgRAM[i], nil
+	} else if a >= 0x8000 {
+		return c.prgROM[a-0x8000], nil
+	}
+	return 0, errors.New("oob nrom read")
+}
+
+func (c *nrom) write(a uint16, v uint8) error {
+	if a >= 0x6000 && a < 0x8000 {
+		i := mirrorIndex(a, 0x6000, uint16(len(c.prgRAM)))
+		c.prgRAM[i] = v
+		return nil
+	}
+	return errors.New("oob nrom write")
+}
+
+func (c *nrom) readCHR(a uint16) (uint8, error) {
+	if a >= len(chr) {
+		return 0, errors.New("oob CHR read")
+	}
+	return chr[a], nil
+}
+
+func (c *nrom) writeCHR(a uint16, v uint8) error {
+	if a >= len(chr) {
+		return errors.New("oob CHR write")
+	}
+	chr[a] = v
+	return nil
+}
+
+func (c *nrom) ciramMirror() mirror {
+	return c.mirror
+}
