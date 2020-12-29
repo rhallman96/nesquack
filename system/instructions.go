@@ -9,14 +9,14 @@ type instruction struct {
 }
 
 // execute modifies the state of the cpu and memory on behalf of an instruction
-func (i *instruction) execute(c *cpu, bus memoryDevice) error {
+func (i *instruction) execute(c *cpu) error {
 	c.pc++
-	a, err := i.addressMode(c, bus)
+	a, err := i.addressMode(c, c.bus)
 	if err != nil {
 		return err
 	}
 	c.clock += i.cycles
-	return i.operation(c, bus, a)
+	return i.operation(c, c.bus, a)
 }
 
 // the 2A03 instruction set, excluding undocumented opcodes
@@ -349,7 +349,7 @@ func bpl(c *cpu, bus memoryDevice, a uint16) error {
 
 func brk(c *cpu, bus memoryDevice, a uint16) error {
 	c.setFlag(flagBreak)
-	return c.branch(bus, 0xfffe)
+	return c.interrupt(bus, 0xfffe)
 }
 
 func bvc(c *cpu, bus memoryDevice, a uint16) error {
@@ -768,6 +768,6 @@ func branch(c *cpu, a uint16) {
 	c.clock++
 	if pageCrossed(c.pc, a) {
 		c.clock++
-		c.pc = a
 	}
+	c.pc = a
 }

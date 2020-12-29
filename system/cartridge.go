@@ -20,15 +20,15 @@ const (
 	nromHeader = 0x00
 )
 
+// cartridge is a memory device with extended functionality for CHR accesses.
+// It is defined as an interface because different cartridge designs contain
+// defferent internal components and mappings that cannot be neatly described
+// by a single struct.
 type cartridge interface {
 	memoryDevice
 	readCHR(a uint16) (uint8, error)
 	writeCHR(a uint16, v uint8) error
-	ciramMirror() mirror
-}
-
-func isBitSet(flag, bit uint8) bool {
-	return (flag & (1 << bit)) != 0
+	vramMirror() mirrorMode
 }
 
 // createCartridge creates a cartridge based on the ROM's raw binary data.
@@ -48,7 +48,7 @@ func createCartridge(data []uint8) (cartridge, error) {
 	hasTrainer := isBitSet(data[6], 2)
 	ignoreMirror := isBitSet(data[6], 3)
 
-	var ciMirror mirror = noMirror
+	var ciMirror mirrorMode = onePage
 	if !ignoreMirror {
 		if hMirror {
 			ciMirror = horizontal
@@ -99,7 +99,7 @@ type nrom struct {
 	prgRAM []uint8
 	chr    []uint8
 
-	mirror mirror
+	mirror mirrorMode
 }
 
 func (c *nrom) read(a uint16) (uint8, error) {
@@ -122,20 +122,20 @@ func (c *nrom) write(a uint16, v uint8) error {
 }
 
 func (c *nrom) readCHR(a uint16) (uint8, error) {
-	if a >= len(chr) {
+	if a >= uint16(len(c.chr)) {
 		return 0, errors.New("oob CHR read")
 	}
-	return chr[a], nil
+	return c.chr[a], nil
 }
 
 func (c *nrom) writeCHR(a uint16, v uint8) error {
-	if a >= len(chr) {
+	if a >= uint16(len(c.chr)) {
 		return errors.New("oob CHR write")
 	}
-	chr[a] = v
+	c.chr[a] = v
 	return nil
 }
 
-func (c *nrom) ciramMirror() mirror {
+func (c *nrom) vramMirror() mirrorMode {
 	return c.mirror
 }

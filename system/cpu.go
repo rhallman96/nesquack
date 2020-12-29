@@ -7,6 +7,8 @@ import (
 
 // cpu implements the Ricoh 2A03 (a MOS 6502 derivative) instruction set.
 type cpu struct {
+	bus *cpuBus
+
 	pc             uint16
 	a, x, y, p, sp uint8
 	clock          uint64
@@ -35,14 +37,14 @@ const (
 	irqVector            = 0xfffe
 
 	// cpu cycles used for interrupt branching
-	branchCycles = 7
+	interruptCycles = 7
 )
 
 // step performs the next instruction in memory and returns how many cycles
 // it took to execute.
-func (c *cpu) step(bus memoryDevice) error {
+func (c *cpu) step() error {
 	// fetch the next opcode
-	op, err := bus.read(c.pc)
+	op, err := c.bus.read(c.pc)
 	if err != nil {
 		return err
 	}
@@ -54,22 +56,22 @@ func (c *cpu) step(bus memoryDevice) error {
 	}
 
 	// execute
-	err = i.execute(c, bus)
+	err = i.execute(c)
 	if err != nil {
 		return err
 	}
 
 	// handle interrupts
 	if c.nmi {
-		c.clock += branchCycles
+		c.clock += interruptCycles
 		// indicates that the interrupt was not handled during a brk instruction
 		c.setFlagValue(flagBreak, false)
-		err = c.branch(bus, nmiVector)
+		err = c.interrupt(c.bus, nmiVector)
 		c.nmi = false
 	} else if !c.isFlagSet(flagInterrupt) && c.irq {
-		c.clock += branchCycles
+		c.clock += interruptCycles
 		c.setFlagValue(flagBreak, false)
-		err = c.branch(bus, irqVector)
+		err = c.interrupt(c.bus, irqVector)
 	}
 
 	return err
@@ -88,7 +90,7 @@ func (c *cpu) triggerNMI() {
 	c.nmi = true
 }
 
-func (c *cpu) branch(bus memoryDevice, v uint16) error {
+func (c *cpu) interrupt(bus memoryDevice, v uint16) error {
 	c.pc++
 	err := c.pushWord(bus, c.pc)
 	if err != nil {
