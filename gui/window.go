@@ -29,9 +29,8 @@ func Launch(path string) {
 	drawer := newDrawer(renderer)
 	defer drawer.destroy()
 
-	nes := system.NewNES(d)
+	nes := system.NewNES(drawer)
 
-	i := 0
 	running := true
 	for running {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {

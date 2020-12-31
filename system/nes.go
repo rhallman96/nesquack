@@ -16,4 +16,3 @@ func NewNES(drawer Drawer) *NES {
 func (n *NES) Step() error {
 	return nil
 }
-`
