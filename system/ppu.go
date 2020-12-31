@@ -3,13 +3,14 @@ package system
 import "errors"
 
 const (
+	DrawWidth  = 256
+	DrawHeight = 240
+
 	oamSize              = 0x100
 	nameTableSize uint16 = 0x400
 
 	scanlineCount  = 261
 	dotCount       = 341
-	pictureWidth   = 256
-	pictureHeight  = 240
 	postRenderLine = 240
 
 	// vram down increment for data accesses
@@ -21,15 +22,21 @@ const (
 
 // Drawer is an abstraction to draw pixel data to the screen.
 // It is not implemented in this package and should instead
-// be implemented with the emulator's specific graphics library.
+// be implemented using the emulator's respective graphics library.
 type Drawer interface {
-	Draw(col, row, rgb int)
+	DrawPixel(col, row, rgb int)
+
+	// CompleteFrame flags a single frame buffer as drawn and ready to be
+	// presented in the emulator's screen.
+	CompleteFrame()
 }
 
 type ppu struct {
+	drawer Drawer
+
 	bus *ppuBus
 
-	drawer Drawer
+	dot, scanline int
 
 	oamAddr uint8
 	oam     [oamSize]uint8

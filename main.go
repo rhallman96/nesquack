@@ -1,12 +1,9 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/rhallman96/nesquack/system"
+	"github.com/rhallman96/nesquack/gui"
 )
 
 func main() {
-	nes := system.NewNES()
-	fmt.Println(nes)
+	gui.Launch("")
 }

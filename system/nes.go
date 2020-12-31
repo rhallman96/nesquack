@@ -8,14 +8,12 @@ type NES struct {
 	ppuBus *ppuBus
 }
 
-func NewNES() *NES {
-	return &NES{}
+func NewNES(drawer Drawer) *NES {
+	ppu := &ppu{drawer: drawer}
+	return &NES{ppu: ppu}
 }
 
 func (n *NES) Step() error {
-	err := n.cpu.step()
-	if err != nil {
-		return err
-	}
 	return nil
 }
+`
