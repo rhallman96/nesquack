@@ -1,6 +1,8 @@
 package system
 
-import "errors"
+import (
+	"errors"
+)
 
 const (
 	DrawWidth  = 256
@@ -19,17 +21,6 @@ const (
 	// 1 CPU cycle = 3 PPU cycles
 	ppuCycleRatio = 3
 )
-
-// Drawer is an abstraction to draw pixel data to the screen.
-// It is not implemented in this package and should instead
-// be implemented using the emulator's respective graphics library.
-type Drawer interface {
-	DrawPixel(col, row, rgb int)
-
-	// CompleteFrame flags a single frame buffer as drawn and ready to be
-	// presented in the emulator's screen.
-	CompleteFrame()
-}
 
 type ppu struct {
 	drawer Drawer
@@ -69,8 +60,25 @@ type ppu struct {
 	lastWrite uint8
 }
 
+func newPPU(drawer Drawer, bus *ppuBus) *ppu {
+	return &ppu{
+		drawer: drawer,
+		bus:    bus,
+	}
+}
+
 func (p *ppu) step(cpuCycles uint64) {
 	for i := uint64(0); i < cpuCycles; i++ {
+		p.drawer.DrawPixel(p.dot, p.scanline, palette[(p.dot+p.scanline)%len(palette)])
+		p.dot++
+		if p.dot == DrawWidth {
+			p.dot = 0
+			p.scanline++
+			if p.scanline == DrawHeight {
+				p.scanline = 0
+				p.drawer.CompleteFrame()
+			}
+		}
 	}
 }
 

@@ -51,7 +51,14 @@ const (
 type cpuBus struct {
 	wram      [wramMirror]uint8
 	ppu       *ppu
-	cartridge *cartridge
+	cartridge cartridge
+}
+
+func newCPUBus(p *ppu, c cartridge) *cpuBus {
+	return &cpuBus{
+		ppu:       p,
+		cartridge: c,
+	}
 }
 
 func (b *cpuBus) write(a uint16, v uint8) error {
@@ -65,7 +72,7 @@ func (b *cpuBus) write(a uint16, v uint8) error {
 	case a == ppuOAMAddr:
 		return b.ppu.oamDMA(v, b)
 	case a >= cartridgeLowAddr && a <= cartridgeHighAddr:
-		// cartridge access
+		return b.cartridge.write(a, v)
 	default:
 		// TODO: test features and APU
 	}
@@ -81,7 +88,7 @@ func (b *cpuBus) read(a uint16) (uint8, error) {
 		i := mirrorIndex(a, ppuRegistersLowAddr, ppuRegistersMirror)
 		return b.ppu.read(i)
 	case a >= cartridgeLowAddr && a <= cartridgeHighAddr:
-		// cartridge access
+		return b.cartridge.read(a)
 	default:
 		// TODO: test features and APU
 	}
@@ -98,6 +105,12 @@ type ppuBus struct {
 	cartridge  cartridge
 	vram       [vramSize]uint8 // used for name tables
 	paletteRAM [paletteMirror]uint8
+}
+
+func newPPUBus(c cartridge) *ppuBus {
+	return &ppuBus{
+		cartridge: c,
+	}
 }
 
 func (b *ppuBus) write(a uint16, v uint8) error {

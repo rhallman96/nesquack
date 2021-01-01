@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"fmt"
+
 	"github.com/rhallman96/nesquack/system"
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -10,7 +12,7 @@ const (
 	height = 480
 )
 
-func Launch(path string) {
+func Launch(rom []uint8) {
 	if err := sdl.Init(sdl.INIT_EVERYTHING); err != nil {
 		panic(err)
 	}
@@ -29,20 +31,25 @@ func Launch(path string) {
 	drawer := newDrawer(renderer)
 	defer drawer.destroy()
 
-	nes := system.NewNES(drawer)
+	nes, err := system.NewNES(rom, drawer)
+	if err != nil {
+		panic(err)
+	}
 
 	running := true
 	for running {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch event.(type) {
 			case *sdl.QuitEvent:
-				println("Quit")
 				running = false
 				break
 			}
 		}
 		for !drawer.checkComplete() {
-			nes.Step()
+			err := nes.Step()
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
 		drawer.present()
 	}

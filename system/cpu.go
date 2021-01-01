@@ -29,16 +29,34 @@ const (
 	flagCarry     uint8 = 1
 
 	// boot up register values
-	spStartValue uint8 = 0xff
+	spStartValue     uint8 = 0xff
+	statusStartValue uint8 = 0x34
 
 	// system addresses
 	spBaseAddress uint16 = 0x0100
 	nmiVector            = 0xfffa
+	resetVector          = 0xfffc
 	irqVector            = 0xfffe
 
 	// cpu cycles used for interrupt branching
 	interruptCycles = 7
 )
+
+func newCPU(bus *cpuBus) (*cpu, error) {
+	r := &cpu{
+		bus: bus,
+		sp:  spStartValue,
+		p:   statusStartValue,
+	}
+
+	pc, err := readWord(bus, resetVector)
+	if err != nil {
+		return nil, err
+	}
+	r.pc = pc
+
+	return r, nil
+}
 
 // step performs the next instruction in memory and returns how many cycles
 // it took to execute.

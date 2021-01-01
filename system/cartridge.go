@@ -3,6 +3,7 @@ package system
 import (
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 )
 
@@ -16,6 +17,11 @@ const (
 	chrROMSizeUnit = 0x2000
 	headerSize     = 0x10
 	trainerSize    = 0x200
+
+	prgRAMLowAddr  = 0x6000
+	prgRAMHighAddr = 0x7fff
+	prgROMLowAddr  = 0x8000
+	prgROMHighAddr = 0xffff
 
 	nromHeader = 0x00
 )
@@ -34,19 +40,19 @@ type cartridge interface {
 // createCartridge creates a cartridge based on the ROM's raw binary data.
 // The cartridge header is assumed to be in the iNES format (NES 2.0 is not
 // currently supported).
-func createCartridge(data []uint8) (cartridge, error) {
+func createCartridge(rom []uint8) (cartridge, error) {
 	// load iNES flags
-	if !reflect.DeepEqual(data[:4], inesPrefix) {
+	if !reflect.DeepEqual(rom[:4], inesPrefix) {
 		return nil, errors.New("rom is not in iNES format")
 	}
-	prgROMSize := int(data[4]) * prgROMSizeUnit
-	chrROMSize := int(data[5]) * chrROMSizeUnit
-	mapper := (data[7] & 0xf0) | (data[6] >> 4)
+	prgROMSize := int(rom[4]) * prgROMSizeUnit
+	chrROMSize := int(rom[5]) * chrROMSizeUnit
+	mapper := (rom[7] & 0xf0) | (rom[6] >> 4)
 
-	hMirror := isBitSet(data[6], 0)
+	hMirror := isBitSet(rom[6], 0)
 	// hasBattery := isBitSet(data[6], 1)
-	hasTrainer := isBitSet(data[6], 2)
-	ignoreMirror := isBitSet(data[6], 3)
+	hasTrainer := isBitSet(rom[6], 2)
+	ignoreMirror := isBitSet(rom[6], 3)
 
 	var ciMirror mirrorMode = onePage
 	if !ignoreMirror {
@@ -58,7 +64,7 @@ func createCartridge(data []uint8) (cartridge, error) {
 	}
 
 	// initialize prgROM, prgRAM, and CHR
-	prgRAMSize := int(data[8]) * prgRAMSizeUnit
+	prgRAMSize := int(rom[8]) * prgRAMSizeUnit
 	if prgRAMSize == 0 {
 		prgRAMSize = prgRAMSizeUnit
 	}
@@ -68,9 +74,13 @@ func createCartridge(data []uint8) (cartridge, error) {
 		prgROMIndex += trainerSize
 	}
 	chrROMIndex := prgROMIndex + chrROMSize
-	prgROM := data[prgROMIndex : prgROMIndex+prgROMSize]
+	prgROM := rom[prgROMIndex : prgROMIndex+prgROMSize]
 	prgRAM := make([]uint8, prgRAMSize, prgRAMSize)
-	chrROM := data[chrROMIndex : chrROMIndex+chrROMSize]
+	chrROM := rom[chrROMIndex : chrROMIndex+chrROMSize]
+
+	log.Printf("PRG ROM: %d bytes", len(prgROM))
+	log.Printf("PRG RAM: %d bytes", len(prgRAM))
+	log.Printf("CHR: %d bytes", len(chrROM))
 
 	// create a cartridge corresponding to iNES metadata
 	var c cartridge
@@ -103,22 +113,27 @@ type nrom struct {
 }
 
 func (c *nrom) read(a uint16) (uint8, error) {
-	if a >= 0x6000 && a < 0x8000 {
+	switch {
+	case (a >= prgRAMLowAddr) && (a <= prgRAMHighAddr):
 		i := mirrorIndex(a, 0x6000, uint16(len(c.prgRAM)))
 		return c.prgRAM[i], nil
-	} else if a >= 0x8000 {
-		return c.prgROM[a-0x8000], nil
+	case a >= prgROMLowAddr:
+		i := mirrorIndex(a, prgROMLowAddr, uint16(len(c.prgROM)))
+		return c.prgROM[i], nil
+	default:
+		return 0, errors.New(fmt.Sprintf("oob nrom read at 0x%x", a))
 	}
-	return 0, errors.New("oob nrom read")
 }
 
 func (c *nrom) write(a uint16, v uint8) error {
-	if a >= 0x6000 && a < 0x8000 {
+	switch {
+	case (a >= prgRAMLowAddr) && (a <= prgRAMHighAddr):
 		i := mirrorIndex(a, 0x6000, uint16(len(c.prgRAM)))
 		c.prgRAM[i] = v
 		return nil
+	default:
+		return errors.New(fmt.Sprintf("oob nrom write at 0x%x", a))
 	}
-	return errors.New("oob nrom write")
 }
 
 func (c *nrom) readCHR(a uint16) (uint8, error) {
