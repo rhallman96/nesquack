@@ -73,7 +73,7 @@ func createCartridge(rom []uint8) (cartridge, error) {
 	if hasTrainer {
 		prgROMIndex += trainerSize
 	}
-	chrROMIndex := prgROMIndex + chrROMSize
+	chrROMIndex := prgROMIndex + prgROMSize
 	prgROM := rom[prgROMIndex : prgROMIndex+prgROMSize]
 	prgRAM := make([]uint8, prgRAMSize, prgRAMSize)
 	chrROM := rom[chrROMIndex : chrROMIndex+chrROMSize]

@@ -24,6 +24,9 @@ func NewNES(rom []uint8, drawer Drawer) (*NES, error) {
 		return nil, err
 	}
 
+	// TODO: investigate more elegant way of instantiating
+	ppu.cpu = cpu
+
 	return &NES{
 		cpu: cpu,
 		ppu: ppu,
@@ -38,6 +41,9 @@ func (n *NES) Step() error {
 	}
 	cycles := n.cpu.clock - prevCycles
 
-	n.ppu.step(cycles)
+	err = n.ppu.step(cycles)
+	if err != nil {
+		return err
+	}
 	return nil
 }

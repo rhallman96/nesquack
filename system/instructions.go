@@ -270,7 +270,7 @@ func and(c *cpu, bus memoryDevice, a uint16) error {
 	}
 	c.setSignFlag(v)
 	c.setZeroFlag(v)
-	c.a = v
+	c.a &= v
 	return nil
 }
 

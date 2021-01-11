@@ -1,6 +1,8 @@
 package system
 
-import "errors"
+import (
+	"errors"
+)
 
 // CPU bus addresses
 const (
@@ -36,7 +38,7 @@ const (
 	vramSize     uint16 = 0x800
 
 	// palette ram addresses
-	paletteLowAddr  uint16 = 0x3ff0
+	paletteLowAddr  uint16 = 0x3f00
 	paletteHighAddr uint16 = 0x3fff
 	paletteMirror   uint16 = 0x20
 )
@@ -125,6 +127,9 @@ func (b *ppuBus) write(a uint16, v uint8) error {
 		b.vram[i] = v
 	case a <= paletteHighAddr:
 		i := mirrorIndex(a, paletteLowAddr, paletteMirror)
+		if i%4 == 0 {
+			i = 0
+		}
 		b.paletteRAM[i] = v
 	}
 	return nil
@@ -142,6 +147,9 @@ func (b *ppuBus) read(a uint16) (uint8, error) {
 		return b.vram[i], nil
 	case a <= paletteHighAddr:
 		i := mirrorIndex(a, paletteLowAddr, paletteMirror)
+		if i%4 == 0 {
+			i = 0
+		}
 		return b.paletteRAM[i], nil
 	}
 	return 0, errors.New("oob PPU bus read")

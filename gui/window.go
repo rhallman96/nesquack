@@ -1,8 +1,6 @@
 package gui
 
 import (
-	"fmt"
-
 	"github.com/rhallman96/nesquack/system"
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -48,7 +46,7 @@ func Launch(rom []uint8) {
 		for !drawer.checkComplete() {
 			err := nes.Step()
 			if err != nil {
-				fmt.Println(err)
+				panic(err)
 			}
 		}
 		drawer.present()

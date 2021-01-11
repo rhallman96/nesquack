@@ -8,8 +8,12 @@ const (
 	DrawWidth  = 256
 	DrawHeight = 240
 
-	oamSize              = 0x100
-	nameTableSize uint16 = 0x400
+	oamSize       = 0x100
+	nameTableSize = 0x400
+
+	nameTableWidth    = 32
+	nameTableHeight   = 30
+	nameTableGridSize = nameTableWidth * nameTableHeight
 
 	scanlineCount  = 261
 	dotCount       = 341
@@ -26,6 +30,7 @@ type ppu struct {
 	drawer Drawer
 
 	bus *ppuBus
+	cpu *cpu
 
 	dot, scanline int
 
@@ -33,10 +38,10 @@ type ppu struct {
 	oam     [oamSize]uint8
 
 	scrollX, scrollY uint8
-	scrollHi         bool
+	scrollLow        bool
 
-	address   uint16
-	addressHi bool
+	address    uint16
+	addressLow bool
 
 	nameTableBaseAddr  uint16
 	spriteTableAddr    uint16
@@ -67,19 +72,125 @@ func newPPU(drawer Drawer, bus *ppuBus) *ppu {
 	}
 }
 
-func (p *ppu) step(cpuCycles uint64) {
-	for i := uint64(0); i < cpuCycles; i++ {
-		p.drawer.DrawPixel(p.dot, p.scanline, palette[(p.dot+p.scanline)%len(palette)])
+func (p *ppu) step(cpuCycles uint64) error {
+	cycles := cpuCycles * ppuCycleRatio
+
+	bgColor, _ := p.bus.read(paletteLowAddr)
+	for i := uint64(0); i < cycles; i++ {
+
+		if (p.dot < DrawWidth) && (p.scanline < DrawHeight) {
+			p.drawer.DrawPixel(p.dot, p.scanline, palette[bgColor])
+			p.drawTiles()
+			p.drawSprites()
+		}
+
+		// advance dot
 		p.dot++
-		if p.dot == DrawWidth {
+		if p.dot == dotCount {
 			p.dot = 0
 			p.scanline++
-			if p.scanline == DrawHeight {
-				p.scanline = 0
+			switch p.scanline {
+			case postRenderLine:
 				p.drawer.CompleteFrame()
+			case postRenderLine + 1:
+				p.vBlankPeriod = true
+				if p.vblankNMI {
+					p.cpu.triggerNMI()
+				}
+			case scanlineCount:
+				p.vBlankPeriod = false
+				p.scanline = 0
 			}
 		}
 	}
+	return nil
+}
+
+func (p *ppu) drawTiles() error {
+	if !p.showBgLeft || !p.showBg {
+		return nil
+	}
+
+	// get tile value
+	pixelX := p.dot + int(p.scrollX)
+	pixelY := p.scanline + int(p.scrollY)
+	tileX := pixelX / 8
+	tileY := pixelY / 8
+
+	tileIndex := (tileY * nameTableWidth) + tileX
+	tileIndex += ((tileX / nameTableWidth) * int(nameTableSize))
+	tileIndex += ((tileY / nameTableHeight) * int(nameTableSize) * 2)
+
+	tileValue, err := p.bus.read(p.nameTableBaseAddr + uint16(tileIndex))
+	if err != nil {
+		return err
+	}
+
+	// get tile pixel color
+	patternAddr := p.bgPatternTableAddr + (uint16(tileValue) * 16) + uint16(pixelY%8)
+	pValueLow, err := p.bus.read(patternAddr)
+	if err != nil {
+		return err
+	}
+	pValueHi, err := p.bus.read(patternAddr + 8)
+	if err != nil {
+		return err
+	}
+
+	var cIndex int = 0
+	if isBitSet(pValueLow, uint8(7-(pixelX%8))) {
+		cIndex |= 0x1
+	}
+	if isBitSet(pValueHi, uint8(7-(pixelX%8))) {
+		cIndex |= 0x2
+	}
+
+	// pixels with a zero value are transparent
+	if cIndex == 0 {
+		return nil
+	}
+
+	// get palette
+	at := p.nameTableBaseAddr + uint16((tileIndex/nameTableSize)*nameTableSize)
+	at += nameTableGridSize
+
+	atIndexX := (tileX % nameTableWidth) / 4
+	atIndexY := (tileY % nameTableHeight) / 4
+	atAddr := at + uint16((atIndexY*8)+atIndexX)
+
+	c, err := p.bus.read(atAddr)
+	if err != nil {
+		return err
+	}
+
+	if (tileY/2)%2 == 0 {
+		if (tileX/2)%2 == 0 {
+			c = c & 0x3 // top left
+		} else {
+			c = (c >> 2) & 0x3
+		}
+	} else {
+		if (tileX/2)%2 == 0 {
+			c = (c >> 4) & 0x3
+		} else {
+			c = (c >> 6) & 0x3
+		}
+	}
+	var pIndex uint16 = paletteLowAddr + uint16(c*4) + uint16(cIndex)
+	color, err := p.bus.read(pIndex)
+	if err != nil {
+		return err
+	}
+
+	p.drawer.DrawPixel(p.dot, p.scanline, palette[color])
+	return nil
+}
+
+func (p *ppu) drawSprites() error {
+	if !p.showSprites || !p.showSpritesLeft {
+		return nil
+	}
+	return nil
 }
 
 func (p *ppu) write(a uint16, v uint8) error {
@@ -155,11 +266,15 @@ func (p *ppu) writeMask(v uint8) {
 func (p *ppu) readStatus() (uint8, error) {
 	var r uint8 = 0
 
+	p.addressLow = false
+	p.scrollLow = false
+
 	// bottom 5 bits are last written value
 	r |= (p.lastWrite & 0x1f)
 
 	if p.vBlankPeriod {
 		r |= (1 << 7)
+		p.vBlankPeriod = false
 	}
 
 	if p.spriteZeroHit {
@@ -190,23 +305,22 @@ func (p *ppu) writeOamData(v uint8) {
 
 func (p *ppu) writeScroll(v uint8) {
 	p.lastWrite = v
-	if p.scrollHi {
-		p.scrollX = v
-	} else {
+	if p.scrollLow {
 		p.scrollY = v
+	} else {
+		p.scrollX = v
 	}
-	p.scrollHi = !p.scrollHi
+	p.scrollLow = !p.scrollLow
 }
 
 func (p *ppu) writeAddress(v uint8) {
 	p.lastWrite = v
-	if p.addressHi {
-		p.address &= 0x00ff
-		p.address |= (uint16(v) << 8)
+	if p.addressLow {
+		p.address |= uint16(v)
 	} else {
-		p.address = uint16(v)
+		p.address = (uint16(v) << 8)
 	}
-	p.addressHi = !p.addressHi
+	p.addressLow = !p.addressLow
 }
 
 func (p *ppu) readData() (uint8, error) {

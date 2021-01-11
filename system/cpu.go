@@ -58,6 +58,10 @@ func newCPU(bus *cpuBus) (*cpu, error) {
 	return r, nil
 }
 
+func (c *cpu) String() string {
+	return fmt.Sprintf("{pc: 0x%x, a: 0x%x, x: 0x%x, y: 0x%x, p: 0x%x, sp: 0x%x}", c.pc, c.a, c.x, c.y, c.p, c.sp)
+}
+
 // step performs the next instruction in memory and returns how many cycles
 // it took to execute.
 func (c *cpu) step() error {
@@ -109,8 +113,8 @@ func (c *cpu) triggerNMI() {
 }
 
 func (c *cpu) interrupt(bus memoryDevice, v uint16) error {
-	c.pc++
 	err := c.pushWord(bus, c.pc)
+	c.pc++
 	if err != nil {
 		return err
 	}
