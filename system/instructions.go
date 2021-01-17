@@ -682,15 +682,16 @@ func sbc(c *cpu, bus memoryDevice, a uint16) error {
 	if err != nil {
 		return err
 	}
-	tmp := uint16(c.a) - uint16(v)
+	v = ^v
+	tmp := uint16(v) + uint16(c.a)
 	if c.isFlagSet(flagCarry) {
-		tmp--
+		tmp++
 	}
-	c.setSignFlag(uint8(tmp))
 	c.setZeroFlag(uint8(tmp))
-	c.setFlagValue(flagCarry, tmp < 0x100)
+	c.setSignFlag(uint8(tmp))
+	c.setFlagValue(flagCarry, (tmp > 0xff))
 
-	o := ((c.a^uint8(tmp))&0x80 != 0) && ((c.a^uint8(tmp))&0x80 != 0)
+	o := (((c.a ^ v) & 0x80) == 0) && (((c.a ^ uint8(tmp)) & 0x80) != 0)
 	c.setFlagValue(flagOverflow, o)
 
 	c.a = uint8(tmp)
