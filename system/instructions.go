@@ -268,9 +268,9 @@ func and(c *cpu, bus memoryDevice, a uint16) error {
 	if err != nil {
 		return err
 	}
-	c.setSignFlag(v)
-	c.setZeroFlag(v)
 	c.a &= v
+	c.setSignFlag(c.a)
+	c.setZeroFlag(c.a)
 	return nil
 }
 

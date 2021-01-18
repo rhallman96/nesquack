@@ -8,16 +8,20 @@ type NES struct {
 	ppuBus *ppuBus
 }
 
-func NewNES(rom []uint8, drawer Drawer) (*NES, error) {
+func NewNES(rom []uint8, drawer Drawer, c1 Controller) (*NES, error) {
 	cartridge, err := createCartridge(rom)
 	if err != nil {
 		return nil, err
 	}
 
+	// hook up controllers
+	j1 := &joypad{controller: c1}
+
+	// create system buses
 	ppuBus := newPPUBus(cartridge)
 	ppu := newPPU(drawer, ppuBus)
 
-	cpuBus := newCPUBus(ppu, cartridge)
+	cpuBus := newCPUBus(ppu, cartridge, j1)
 	cpu, err := newCPU(cpuBus)
 
 	if err != nil {

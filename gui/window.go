@@ -26,10 +26,12 @@ func Launch(rom []uint8) {
 	renderer.SetLogicalSize(system.DrawWidth, system.DrawHeight)
 	renderer.Clear()
 
+	j1 := &controller{}
+
 	drawer := newDrawer(renderer)
 	defer drawer.destroy()
 
-	nes, err := system.NewNES(rom, drawer)
+	nes, err := system.NewNES(rom, drawer, j1)
 	if err != nil {
 		panic(err)
 	}

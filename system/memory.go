@@ -28,6 +28,17 @@ func readWord(d memoryDevice, a uint16) (uint16, error) {
 	return (uint16(hi) << 8) + uint16(low), err
 }
 
+// readWordPage reads a word from a page, wrapping around to the beginning
+// in cases where the address is on the last byte in the page.
+func readWordPage(d memoryDevice, a uint16) (uint16, error) {
+	low, err := d.read(a)
+	if err != nil {
+		return 0, err
+	}
+	hi, err := d.read((a & 0xff00) + ((a + 1) % 0x100))
+	return (uint16(hi) << 8) + uint16(low), err
+}
+
 // readWordZeroPage reads a word whose address is specified at a given
 // offset on the zero page. If the address is located at 0x00ff, the high
 // byte will be read from 0x0000.

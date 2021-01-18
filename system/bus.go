@@ -17,7 +17,8 @@ const (
 	ppuRegistersMirror   uint16 = 0x8
 
 	// mapped device registers
-	ppuOAMAddr uint16 = 0x4007
+	ppuOAMAddr   uint16 = 0x4007
+	p1JoypadAddr uint16 = 0x4016
 
 	// cartridge address range
 	cartridgeLowAddr  uint16 = 0x4020
@@ -54,12 +55,15 @@ type cpuBus struct {
 	wram      [wramMirror]uint8
 	ppu       *ppu
 	cartridge cartridge
+
+	joypad1 *joypad
 }
 
-func newCPUBus(p *ppu, c cartridge) *cpuBus {
+func newCPUBus(p *ppu, c cartridge, j1 *joypad) *cpuBus {
 	return &cpuBus{
 		ppu:       p,
 		cartridge: c,
+		joypad1:   j1,
 	}
 }
 
@@ -71,6 +75,8 @@ func (b *cpuBus) write(a uint16, v uint8) error {
 	case a <= ppuRegistersHighAddr:
 		i := mirrorIndex(a, ppuRegistersLowAddr, ppuRegistersMirror)
 		return b.ppu.write(i, v)
+	case a == p1JoypadAddr:
+		b.joypad1.write(v)
 	case a == ppuOAMAddr:
 		return b.ppu.oamDMA(v, b)
 	case a >= cartridgeLowAddr && a <= cartridgeHighAddr:
@@ -89,6 +95,8 @@ func (b *cpuBus) read(a uint16) (uint8, error) {
 	case a <= ppuRegistersHighAddr:
 		i := mirrorIndex(a, ppuRegistersLowAddr, ppuRegistersMirror)
 		return b.ppu.read(i)
+	case a == p1JoypadAddr:
+		return b.joypad1.read(), nil
 	case a >= cartridgeLowAddr && a <= cartridgeHighAddr:
 		return b.cartridge.read(a)
 	default:

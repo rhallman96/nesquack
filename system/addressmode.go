@@ -49,7 +49,7 @@ func indirect(c *cpu, bus memoryDevice) (uint16, error) {
 		return 0, err
 	}
 	c.pc += 2
-	a, err = readWord(bus, a)
+	a, err = readWordPage(bus, a)
 	if err != nil {
 		return 0, err
 	}
