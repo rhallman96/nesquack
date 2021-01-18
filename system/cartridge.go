@@ -49,17 +49,17 @@ func createCartridge(rom []uint8) (cartridge, error) {
 	chrROMSize := int(rom[5]) * chrROMSizeUnit
 	mapper := (rom[7] & 0xf0) | (rom[6] >> 4)
 
-	hMirror := isBitSet(rom[6], 0)
+	vMirror := isBitSet(rom[6], 0)
 	// hasBattery := isBitSet(data[6], 1)
 	hasTrainer := isBitSet(rom[6], 2)
 	ignoreMirror := isBitSet(rom[6], 3)
 
 	var ciMirror mirrorMode = onePage
 	if !ignoreMirror {
-		if hMirror {
-			ciMirror = horizontal
-		} else {
+		if vMirror {
 			ciMirror = vertical
+		} else {
+			ciMirror = horizontal
 		}
 	}
 

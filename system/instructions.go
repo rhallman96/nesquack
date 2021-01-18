@@ -593,8 +593,6 @@ func plp(c *cpu, bus memoryDevice, a uint16) error {
 		return err
 	}
 	c.p = v
-	c.setSignFlag(c.p)
-	c.setZeroFlag(c.p)
 	return nil
 }
 

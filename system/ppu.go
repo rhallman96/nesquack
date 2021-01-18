@@ -119,7 +119,7 @@ func (p *ppu) drawTiles() error {
 
 	tileIndex := (tileY * nameTableWidth) + tileX
 	tileIndex += ((tileX / nameTableWidth) * int(nameTableSize))
-	tileIndex += ((tileY / nameTableHeight) * int(nameTableSize) * 2)
+	tileIndex += ((tileY / nameTableHeight) * 2 * int(nameTableSize))
 
 	tileValue, err := p.bus.read(p.nameTableBaseAddr + uint16(tileIndex))
 	if err != nil {
