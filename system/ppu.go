@@ -80,8 +80,12 @@ func (p *ppu) step(cpuCycles uint64) error {
 
 		if (p.dot < DrawWidth) && (p.scanline < DrawHeight) {
 			p.drawer.DrawPixel(p.dot, p.scanline, palette[bgColor])
-			p.drawTiles()
-			p.drawSprites()
+
+			bgDrawn, err := p.drawTiles()
+			if err != nil {
+				return err
+			}
+			p.drawSprites(bgDrawn)
 		}
 
 		// advance dot
@@ -106,9 +110,9 @@ func (p *ppu) step(cpuCycles uint64) error {
 	return nil
 }
 
-func (p *ppu) drawTiles() error {
+func (p *ppu) drawTiles() (bool, error) {
 	if !p.showBgLeft || !p.showBg {
-		return nil
+		return false, nil
 	}
 
 	// get tile value
@@ -123,18 +127,18 @@ func (p *ppu) drawTiles() error {
 
 	tileValue, err := p.bus.read(p.nameTableBaseAddr + uint16(tileIndex))
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// get tile pixel color
 	patternAddr := p.bgPatternTableAddr + (uint16(tileValue) * 16) + uint16(pixelY%8)
 	pValueLow, err := p.bus.read(patternAddr)
 	if err != nil {
-		return err
+		return false, err
 	}
 	pValueHi, err := p.bus.read(patternAddr + 8)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	var cIndex int = 0
@@ -147,7 +151,7 @@ func (p *ppu) drawTiles() error {
 
 	// pixels with a zero value are transparent
 	if cIndex == 0 {
-		return nil
+		return false, nil
 	}
 
 	// get palette
@@ -160,7 +164,7 @@ func (p *ppu) drawTiles() error {
 
 	c, err := p.bus.read(atAddr)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if (tileY/2)%2 == 0 {
@@ -179,14 +183,14 @@ func (p *ppu) drawTiles() error {
 	var pIndex uint16 = paletteLowAddr + uint16(c*4) + uint16(cIndex)
 	color, err := p.bus.read(pIndex)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	p.drawer.DrawPixel(p.dot, p.scanline, palette[color])
-	return nil
+	return (c != 0), nil
 }
 
-func (p *ppu) drawSprites() error {
+func (p *ppu) drawSprites(bgDrawn bool) error {
 	if !p.showSprites || !p.showSpritesLeft {
 		return nil
 	}

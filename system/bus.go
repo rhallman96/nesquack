@@ -136,7 +136,7 @@ func (b *ppuBus) write(a uint16, v uint8) error {
 	case a <= paletteHighAddr:
 		i := mirrorIndex(a, paletteLowAddr, paletteMirror)
 		if i%4 == 0 {
-			i = 0
+			i %= 0x10
 		}
 		b.paletteRAM[i] = v
 	}
@@ -156,7 +156,7 @@ func (b *ppuBus) read(a uint16) (uint8, error) {
 	case a <= paletteHighAddr:
 		i := mirrorIndex(a, paletteLowAddr, paletteMirror)
 		if i%4 == 0 {
-			i = 0
+			i %= 0x10
 		}
 		return b.paletteRAM[i], nil
 	}
