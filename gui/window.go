@@ -16,10 +16,15 @@ func Launch(rom []uint8) {
 	}
 	defer sdl.Quit()
 
-	window, renderer, err := sdl.CreateWindowAndRenderer(width, height, sdl.WINDOW_RESIZABLE|sdl.RENDERER_ACCELERATED)
+	window, err := sdl.CreateWindow("nesquack", 0, 0, width, height, sdl.WINDOW_RESIZABLE)
 	if err != nil {
 		panic(err)
 	}
+	renderer, err := sdl.CreateRenderer(window, 0, sdl.RENDERER_ACCELERATED)
+	if err != nil {
+		panic(err)
+	}
+
 	defer window.Destroy()
 	defer renderer.Destroy()
 

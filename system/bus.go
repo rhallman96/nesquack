@@ -17,7 +17,7 @@ const (
 	ppuRegistersMirror   uint16 = 0x8
 
 	// mapped device registers
-	ppuOAMAddr   uint16 = 0x4007
+	ppuOAMAddr   uint16 = 0x4014
 	p1JoypadAddr uint16 = 0x4016
 
 	// cartridge address range

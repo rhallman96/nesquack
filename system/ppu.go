@@ -19,6 +19,12 @@ const (
 	dotCount       = 341
 	postRenderLine = 240
 
+	maxSprites        = 8
+	smallSpriteHeight = 8
+	largeSpriteHeight = 16
+
+	spritePaletteAddr = 0x3f10
+
 	// vram down increment for data accesses
 	vramDown = 32
 
@@ -63,34 +69,34 @@ type ppu struct {
 
 	// last value written to a PPU register, used for status read
 	lastWrite uint8
+
+	// whether or not a background tile was drawn at each dot
+	bgPixelDrawn []bool
 }
 
 func newPPU(drawer Drawer, bus *ppuBus) *ppu {
 	return &ppu{
-		drawer: drawer,
-		bus:    bus,
+		drawer:       drawer,
+		bus:          bus,
+		bgPixelDrawn: make([]bool, DrawWidth),
 	}
 }
 
 func (p *ppu) step(cpuCycles uint64) error {
 	cycles := cpuCycles * ppuCycleRatio
 
-	bgColor, _ := p.bus.read(paletteLowAddr)
 	for i := uint64(0); i < cycles; i++ {
-
-		if (p.dot < DrawWidth) && (p.scanline < DrawHeight) {
-			p.drawer.DrawPixel(p.dot, p.scanline, palette[bgColor])
-
-			bgDrawn, err := p.drawTiles()
+		p.dot++
+		if p.dot == DrawWidth && (p.scanline < DrawHeight) {
+			err := p.drawTiles()
 			if err != nil {
 				return err
 			}
-			p.drawSprites(bgDrawn)
-		}
-
-		// advance dot
-		p.dot++
-		if p.dot == dotCount {
+			err = p.drawSprites()
+			if err != nil {
+				return err
+			}
+		} else if p.dot == dotCount {
 			p.dot = 0
 			p.scanline++
 			switch p.scanline {
@@ -110,90 +116,206 @@ func (p *ppu) step(cpuCycles uint64) error {
 	return nil
 }
 
-func (p *ppu) drawTiles() (bool, error) {
-	if !p.showBgLeft || !p.showBg {
-		return false, nil
-	}
-
-	// get tile value
-	pixelX := p.dot + int(p.scrollX)
-	pixelY := p.scanline + int(p.scrollY)
-	tileX := pixelX / 8
-	tileY := pixelY / 8
-
-	tileIndex := (tileY * nameTableWidth) + tileX
-	tileIndex += ((tileX / nameTableWidth) * int(nameTableSize))
-	tileIndex += ((tileY / nameTableHeight) * 2 * int(nameTableSize))
-
-	tileValue, err := p.bus.read(p.nameTableBaseAddr + uint16(tileIndex))
-	if err != nil {
-		return false, err
-	}
-
-	// get tile pixel color
-	patternAddr := p.bgPatternTableAddr + (uint16(tileValue) * 16) + uint16(pixelY%8)
-	pValueLow, err := p.bus.read(patternAddr)
-	if err != nil {
-		return false, err
-	}
-	pValueHi, err := p.bus.read(patternAddr + 8)
-	if err != nil {
-		return false, err
-	}
-
-	var cIndex int = 0
-	if isBitSet(pValueLow, uint8(7-(pixelX%8))) {
-		cIndex |= 0x1
-	}
-	if isBitSet(pValueHi, uint8(7-(pixelX%8))) {
-		cIndex |= 0x2
-	}
-
-	// pixels with a zero value are transparent
-	if cIndex == 0 {
-		return false, nil
-	}
-
-	// get palette
-	at := p.nameTableBaseAddr + uint16((tileIndex/nameTableSize)*nameTableSize)
-	at += nameTableGridSize
-
-	atIndexX := (tileX % nameTableWidth) / 4
-	atIndexY := (tileY % nameTableHeight) / 4
-	atAddr := at + uint16((atIndexY*8)+atIndexX)
-
-	c, err := p.bus.read(atAddr)
-	if err != nil {
-		return false, err
-	}
-
-	if (tileY/2)%2 == 0 {
-		if (tileX/2)%2 == 0 {
-			c = c & 0x3 // top left
-		} else {
-			c = (c >> 2) & 0x3
-		}
-	} else {
-		if (tileX/2)%2 == 0 {
-			c = (c >> 4) & 0x3
-		} else {
-			c = (c >> 6) & 0x3
-		}
-	}
-	var pIndex uint16 = paletteLowAddr + uint16(c*4) + uint16(cIndex)
-	color, err := p.bus.read(pIndex)
-	if err != nil {
-		return false, err
-	}
-
-	p.drawer.DrawPixel(p.dot, p.scanline, palette[color])
-	return (c != 0), nil
-}
-
-func (p *ppu) drawSprites(bgDrawn bool) error {
-	if !p.showSprites || !p.showSpritesLeft {
+func (p *ppu) drawTiles() error {
+	if !p.showBg {
 		return nil
 	}
+
+	bgColor, err := p.bus.read(paletteLowAddr)
+	if err != nil {
+		return err
+	}
+
+	for dot := 0; dot < DrawWidth; dot++ {
+		p.bgPixelDrawn[dot] = false
+		p.drawer.DrawPixel(dot, p.scanline, palette[bgColor])
+
+		if !p.showBgLeft && dot < 8 {
+			continue
+		}
+
+		// get tile value
+		pixelX := dot + int(p.scrollX)
+		pixelY := p.scanline + int(p.scrollY)
+		tileX := pixelX / 8
+		tileY := pixelY / 8
+
+		tileIndex := (tileY * nameTableWidth) + tileX
+		tileIndex += ((tileX / nameTableWidth) * int(nameTableSize))
+		tileIndex += ((tileY / nameTableHeight) * 2 * int(nameTableSize))
+
+		tileValue, err := p.bus.read(p.nameTableBaseAddr + uint16(tileIndex))
+		if err != nil {
+			return err
+		}
+
+		// get tile pixel color
+		patternAddr := p.bgPatternTableAddr + (uint16(tileValue) * 16) + uint16(pixelY%8)
+		pValueLow, err := p.bus.read(patternAddr)
+		if err != nil {
+			return err
+		}
+		pValueHi, err := p.bus.read(patternAddr + 8)
+		if err != nil {
+			return err
+		}
+
+		var cIndex int = 0
+		if isBitSet(pValueLow, uint8(7-(pixelX%8))) {
+			cIndex |= 0x1
+		}
+		if isBitSet(pValueHi, uint8(7-(pixelX%8))) {
+			cIndex |= 0x2
+		}
+
+		// pixels with a zero value are transparent
+		if cIndex == 0 {
+			continue
+		}
+
+		p.bgPixelDrawn[dot] = true
+
+		// get palette
+		at := p.nameTableBaseAddr + uint16((tileIndex/nameTableSize)*nameTableSize)
+		at += nameTableGridSize
+
+		atIndexX := (tileX % nameTableWidth) / 4
+		atIndexY := (tileY % nameTableHeight) / 4
+		atAddr := at + uint16((atIndexY*8)+atIndexX)
+
+		c, err := p.bus.read(atAddr)
+		if err != nil {
+			return err
+		}
+
+		if (tileY/2)%2 == 0 {
+			if (tileX/2)%2 == 0 {
+				// top left
+				c = c & 0x3
+			} else {
+				// top right
+				c = (c >> 2) & 0x3
+			}
+		} else {
+			if (tileX/2)%2 == 0 {
+				// bottom left
+				c = (c >> 4) & 0x3
+			} else {
+				// bottom right
+				c = (c >> 6) & 0x3
+			}
+		}
+
+		var pIndex uint16 = paletteLowAddr + uint16(c*4) + uint16(cIndex)
+		color, err := p.bus.read(pIndex)
+		if err != nil {
+			return err
+		}
+		p.drawer.DrawPixel(dot, p.scanline, palette[color])
+	}
+
+	return nil
+}
+
+func (p *ppu) drawSprites() error {
+	p.spriteZeroHit = false
+
+	if !p.showSprites {
+		return nil
+	}
+
+	spriteHeight := smallSpriteHeight
+	if p.largeSprites {
+		spriteHeight = largeSpriteHeight
+	}
+
+	// find index of last sprite to draw
+	lastSpriteIndex := oamSize - 4
+	spriteCount := 0
+	for i := 0; i < oamSize; i += 4 {
+		y := int(p.oam[i]) - int(p.scrollY)
+		if p.scanline >= y && (y < (p.scanline + spriteHeight)) {
+			spriteCount++
+			if spriteCount == maxSprites {
+				lastSpriteIndex = i
+				break
+			}
+		}
+	}
+
+	// iterate over sprites in reverse, since earlier sprites are drawn with higher priority
+	for i := lastSpriteIndex; i >= 0; i -= 4 {
+		y := int(p.oam[i]) - int(p.scrollY)
+		if (p.scanline < y) || (p.scanline >= y+spriteHeight) {
+			continue
+		}
+
+		x := int(p.oam[i+3])
+		if x < 0 || x >= DrawWidth {
+			continue
+		}
+
+		//inFront := isBitSet(p.oam[i+2], 5)
+		pIndex := p.oam[i+2] & 0x3
+		//hFlip := isBitSet(p.oam[i+2], 6)
+		//vFlip := isBitSet(p.oam[i+3], 7)
+		tileValue := p.oam[i+1]
+
+		patternBaseAddr := p.spriteTableAddr
+		if p.largeSprites {
+			continue
+			if isBitSet(p.oam[i+1], 0) {
+				patternBaseAddr = 0x1000
+			} else {
+				patternBaseAddr = 0
+			}
+			tileValue &= 0xfe
+		}
+
+		// draw sprite
+		iy := p.scanline - y
+
+		patternAddr := patternBaseAddr + uint16(16*tileValue) + uint16(iy)
+		pValueLow, err := p.bus.read(patternAddr)
+		if err != nil {
+			return err
+		}
+		pValueHi, err := p.bus.read(patternAddr + 8)
+		if err != nil {
+			return err
+		}
+
+		for ix := 0; ix < 8; ix++ {
+			if x+ix >= DrawWidth {
+				break
+			}
+
+			var cIndex int = 0
+			if isBitSet(pValueLow, uint8(7-(ix%8))) {
+				cIndex |= 0x1
+			}
+			if isBitSet(pValueHi, uint8(7-(ix%8))) {
+				cIndex |= 0x2
+			}
+
+			// pixels with a zero value are transparent
+			if cIndex == 0 {
+				continue
+			}
+
+			if (i == 0) && (p.bgPixelDrawn[x+ix]) {
+				p.spriteZeroHit = true
+			}
+
+			var pIndex uint16 = spritePaletteAddr + uint16(pIndex*4) + uint16(cIndex)
+			color, err := p.bus.read(pIndex)
+			if err != nil {
+				return err
+			}
+			p.drawer.DrawPixel(x+ix, p.scanline, palette[color])
+		}
+	}
+
 	return nil
 }
 
