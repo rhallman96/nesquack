@@ -70,6 +70,9 @@ type ppu struct {
 	// last value written to a PPU register, used for status read
 	lastWrite uint8
 
+	// data read from vram is stored in a buffer
+	dataReadBuffer uint8
+
 	// whether or not a background tile was drawn at each dot
 	bgPixelDrawn []bool
 }
@@ -140,7 +143,8 @@ func (p *ppu) drawTiles() error {
 		tileX := pixelX / 8
 		tileY := pixelY / 8
 
-		tileIndex := (tileY * nameTableWidth) + tileX
+		tileIndex := (tileY % nameTableHeight) * nameTableWidth
+		tileIndex += (tileX % nameTableWidth)
 		tileIndex += ((tileX / nameTableWidth) * int(nameTableSize))
 		tileIndex += ((tileY / nameTableHeight) * 2 * int(nameTableSize))
 
@@ -176,7 +180,7 @@ func (p *ppu) drawTiles() error {
 		p.bgPixelDrawn[dot] = true
 
 		// get palette
-		at := p.nameTableBaseAddr + uint16((tileIndex/nameTableSize)*nameTableSize)
+		at := p.nameTableBaseAddr + uint16((tileIndex/nameTableGridSize)*nameTableSize)
 		at += nameTableGridSize
 
 		atIndexX := (tileX % nameTableWidth) / 4
@@ -230,40 +234,46 @@ func (p *ppu) drawSprites() error {
 	}
 
 	// find index of last sprite to draw
-	lastSpriteIndex := oamSize - 4
-	spriteCount := 0
-	for i := 0; i < oamSize; i += 4 {
-		y := int(p.oam[i]) - int(p.scrollY)
-		if p.scanline >= y && (y < (p.scanline + spriteHeight)) {
-			spriteCount++
-			if spriteCount == maxSprites {
-				lastSpriteIndex = i
-				break
+	/*
+		lastSpriteIndex := oamSize - 4
+		spriteCount := 0
+		for i := 0; i < oamSize; i += 4 {
+			y := int(p.oam[i]) - int(p.scrollY)
+			if p.scanline >= y && (y < (p.scanline + spriteHeight)) {
+				spriteCount++
+				if spriteCount == maxSprites {
+					lastSpriteIndex = i
+					break
+				}
 			}
 		}
-	}
+	*/
 
+	spriteCount := 0
 	// iterate over sprites in reverse, since earlier sprites are drawn with higher priority
-	for i := lastSpriteIndex; i >= 0; i -= 4 {
-		y := int(p.oam[i]) - int(p.scrollY)
+	for i := 0; i < oamSize; i += 4 {
+		if spriteCount == maxSprites {
+			break
+		}
+		y := int(p.oam[i]) + 1
 		if (p.scanline < y) || (p.scanline >= y+spriteHeight) {
 			continue
 		}
+		spriteCount++
 
 		x := int(p.oam[i+3])
 		if x < 0 || x >= DrawWidth {
 			continue
 		}
 
-		//inFront := isBitSet(p.oam[i+2], 5)
+		inFront := isBitSet(p.oam[i+2], 5)
 		pIndex := p.oam[i+2] & 0x3
-		//hFlip := isBitSet(p.oam[i+2], 6)
-		//vFlip := isBitSet(p.oam[i+3], 7)
+		hFlip := isBitSet(p.oam[i+2], 6)
+		vFlip := isBitSet(p.oam[i+2], 7)
 		tileValue := p.oam[i+1]
 
 		patternBaseAddr := p.spriteTableAddr
 		if p.largeSprites {
-			continue
 			if isBitSet(p.oam[i+1], 0) {
 				patternBaseAddr = 0x1000
 			} else {
@@ -273,9 +283,12 @@ func (p *ppu) drawSprites() error {
 		}
 
 		// draw sprite
-		iy := p.scanline - y
+		yOffset := p.scanline - y
+		if vFlip {
+			yOffset = (yOffset - (yOffset % 8)) + (7 - (yOffset % 8))
+		}
 
-		patternAddr := patternBaseAddr + uint16(16*tileValue) + uint16(iy)
+		patternAddr := patternBaseAddr + (uint16(tileValue) * 16) + uint16(yOffset)
 		pValueLow, err := p.bus.read(patternAddr)
 		if err != nil {
 			return err
@@ -286,15 +299,20 @@ func (p *ppu) drawSprites() error {
 		}
 
 		for ix := 0; ix < 8; ix++ {
-			if x+ix >= DrawWidth {
-				break
+			xOffset := ix
+			if hFlip {
+				xOffset = 7 - ix
+			}
+
+			if x+xOffset >= DrawWidth {
+				continue
 			}
 
 			var cIndex int = 0
-			if isBitSet(pValueLow, uint8(7-(ix%8))) {
+			if isBitSet(pValueLow, uint8(7-(xOffset%8))) {
 				cIndex |= 0x1
 			}
-			if isBitSet(pValueHi, uint8(7-(ix%8))) {
+			if isBitSet(pValueHi, uint8(7-(xOffset%8))) {
 				cIndex |= 0x2
 			}
 
@@ -303,7 +321,7 @@ func (p *ppu) drawSprites() error {
 				continue
 			}
 
-			if (i == 0) && (p.bgPixelDrawn[x+ix]) {
+			if (i == 0) && (p.bgPixelDrawn[x+xOffset]) {
 				p.spriteZeroHit = true
 			}
 
@@ -312,7 +330,10 @@ func (p *ppu) drawSprites() error {
 			if err != nil {
 				return err
 			}
-			p.drawer.DrawPixel(x+ix, p.scanline, palette[color])
+
+			if !(inFront && p.bgPixelDrawn[x+xOffset]) {
+				p.drawer.DrawPixel(x+ix, p.scanline, palette[color])
+			}
 		}
 	}
 
@@ -455,13 +476,20 @@ func (p *ppu) readData() (uint8, error) {
 		return 0, err
 	}
 
+	// non-palette VRAM is buffered in a separate register, and reads are delayed by one
+	result := r
+	if p.address <= vramHighAddr {
+		result = p.dataReadBuffer
+		p.dataReadBuffer = r
+	}
+
 	if p.vramDownInc {
 		p.address += vramDown
 	} else {
 		p.address++
 	}
 
-	return r, nil
+	return result, nil
 }
 
 func (p *ppu) writeData(v uint8) error {

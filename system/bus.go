@@ -125,7 +125,6 @@ func newPPUBus(c cartridge) *ppuBus {
 
 func (b *ppuBus) write(a uint16, v uint8) error {
 	a %= ppuBusMirror
-
 	switch {
 	case a <= patternTablesHighAddr:
 		return b.cartridge.writeCHR(a, v)
@@ -145,7 +144,6 @@ func (b *ppuBus) write(a uint16, v uint8) error {
 
 func (b *ppuBus) read(a uint16) (uint8, error) {
 	a %= ppuBusMirror
-
 	switch {
 	case a <= patternTablesHighAddr:
 		return b.cartridge.readCHR(a)
