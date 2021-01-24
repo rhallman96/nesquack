@@ -23,7 +23,7 @@ func (m mirrorMode) index(a, start, mirror uint16) uint16 {
 		}
 		return (i % mirror) + mirror
 	case vertical:
-		return (a - start) % (mirror * 2)
+		return (a - start) % (2 * mirror)
 	}
 	return 0
 }
