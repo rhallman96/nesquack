@@ -76,11 +76,15 @@ func createCartridge(rom []uint8) (cartridge, error) {
 	chrROMIndex := prgROMIndex + prgROMSize
 	prgROM := rom[prgROMIndex : prgROMIndex+prgROMSize]
 	prgRAM := make([]uint8, prgRAMSize, prgRAMSize)
-	chrROM := rom[chrROMIndex : chrROMIndex+chrROMSize]
+	chr := rom[chrROMIndex : chrROMIndex+chrROMSize]
+
+	if chrROMSize == 0 {
+		chr = make([]uint8, 0x2000)
+	}
 
 	log.Printf("PRG ROM: %d bytes", len(prgROM))
 	log.Printf("PRG RAM: %d bytes", len(prgRAM))
-	log.Printf("CHR: %d bytes", len(chrROM))
+	log.Printf("CHR: %d bytes", len(chr))
 
 	// create a cartridge corresponding to iNES metadata
 	var c cartridge
@@ -90,7 +94,7 @@ func createCartridge(rom []uint8) (cartridge, error) {
 		c = &nrom{
 			prgROM: prgROM,
 			prgRAM: prgRAM,
-			chr:    chrROM,
+			chr:    chr,
 			mirror: ciMirror,
 		}
 	default:

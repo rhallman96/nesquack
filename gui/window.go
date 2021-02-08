@@ -20,7 +20,7 @@ func Launch(rom []uint8) {
 	if err != nil {
 		panic(err)
 	}
-	renderer, err := sdl.CreateRenderer(window, 0, sdl.RENDERER_ACCELERATED)
+	renderer, err := sdl.CreateRenderer(window, 0, sdl.RENDERER_ACCELERATED|sdl.RENDERER_PRESENTVSYNC)
 	if err != nil {
 		panic(err)
 	}

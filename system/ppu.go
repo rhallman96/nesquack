@@ -30,6 +30,9 @@ const (
 
 	// 1 CPU cycle = 3 PPU cycles
 	ppuCycleRatio = 3
+
+	// cycles taken by an OAM DMA transfer
+	oamDMACycles = 514
 )
 
 type ppu struct {
@@ -39,15 +42,15 @@ type ppu struct {
 	cpu *cpu
 
 	dot, scanline int
+	frame         int
 
 	oamAddr uint8
 	oam     [oamSize]uint8
 
 	scrollX, scrollY uint8
-	scrollLow        bool
+	address          uint16
 
-	address    uint16
-	addressLow bool
+	writeToggle bool
 
 	nameTableBaseAddr  uint16
 	spriteTableAddr    uint16
@@ -90,6 +93,13 @@ func (p *ppu) step(cpuCycles uint64) error {
 
 	for i := uint64(0); i < cycles; i++ {
 		p.dot++
+
+		// when rendering is enabled, the ppu skips an additional tick every odd frame
+		if (p.showSprites || p.showBg) && (p.frame%2 == 1) &&
+			(p.dot == dotCount-2) && (p.scanline == scanlineCount-1) {
+			p.dot++
+		}
+
 		if p.dot == DrawWidth && (p.scanline < DrawHeight) {
 			err := p.drawTiles()
 			if err != nil {
@@ -113,6 +123,7 @@ func (p *ppu) step(cpuCycles uint64) error {
 			case scanlineCount:
 				p.vBlankPeriod = false
 				p.scanline = 0
+				p.frame++
 			}
 		}
 	}
@@ -357,7 +368,8 @@ func (p *ppu) write(a uint16, v uint8) error {
 	case 7:
 		return p.writeData(v)
 	default:
-		return errors.New("illegal ppu write")
+		return nil
+		//return errors.New(fmt.Sprintf("illegal ppu write at offset 0x%x", a))
 	}
 	return nil
 }
@@ -413,8 +425,7 @@ func (p *ppu) writeMask(v uint8) {
 func (p *ppu) readStatus() (uint8, error) {
 	var r uint8 = 0
 
-	p.addressLow = false
-	p.scrollLow = false
+	p.writeToggle = false
 
 	// bottom 5 bits are last written value
 	r |= (p.lastWrite & 0x1f)
@@ -452,22 +463,30 @@ func (p *ppu) writeOamData(v uint8) {
 
 func (p *ppu) writeScroll(v uint8) {
 	p.lastWrite = v
-	if p.scrollLow {
+	if p.writeToggle {
 		p.scrollY = v
 	} else {
 		p.scrollX = v
 	}
-	p.scrollLow = !p.scrollLow
+	p.writeToggle = !p.writeToggle
 }
 
 func (p *ppu) writeAddress(v uint8) {
 	p.lastWrite = v
-	if p.addressLow {
+	if p.writeToggle {
 		p.address |= uint16(v)
 	} else {
 		p.address = (uint16(v) << 8)
+
+		// This is a hack, described in this nesdev wiki thread:
+		// http://forums.nesdev.com/viewtopic.php?f=3&t=5365
+		if p.address == 0 {
+			p.scrollX = 0
+			p.scrollY = 0
+			p.nameTableBaseAddr = 0x2000
+		}
 	}
-	p.addressLow = !p.addressLow
+	p.writeToggle = !p.writeToggle
 }
 
 func (p *ppu) readData() (uint8, error) {
@@ -519,5 +538,6 @@ func (p *ppu) oamDMA(v uint8, bus *cpuBus) error {
 		}
 		p.oam[i] = r
 	}
+	p.step(oamDMACycles)
 	return nil
 }
