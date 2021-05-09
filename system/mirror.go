@@ -9,6 +9,7 @@ const (
 	onePage = iota
 	horizontal
 	vertical
+	onePageHigh
 )
 
 // index returns the array index for mirrored name table accesses.
@@ -16,6 +17,8 @@ func (m mirrorMode) index(a, start, mirror uint16) uint16 {
 	switch m {
 	case onePage:
 		return (a - start) % mirror
+	case onePageHigh:
+		return mirror + ((a - start) % mirror)
 	case horizontal:
 		i := a - start
 		if i < (2 * mirror) {

@@ -8,6 +8,7 @@ type NES struct {
 	ppuBus *ppuBus
 }
 
+// NewNES constructs a new NES
 func NewNES(rom []uint8, drawer Drawer, c1 Controller) (*NES, error) {
 	cartridge, err := createCartridge(rom)
 	if err != nil {
@@ -37,6 +38,8 @@ func NewNES(rom []uint8, drawer Drawer, c1 Controller) (*NES, error) {
 	}, nil
 }
 
+// Step fetches and executes one instruction on the NES's CPU.
+// The PPU, MMU and all other peripherals will be updated accordingly.
 func (n *NES) Step() error {
 	prevCycles := n.cpu.clock
 	err := n.cpu.step()

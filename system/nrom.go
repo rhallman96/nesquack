@@ -35,10 +35,10 @@ func (c *nrom) write(a uint16, v uint8) error {
 	case (a >= prgRAMLowAddr) && (a <= prgRAMHighAddr):
 		i := mirrorIndex(a, 0x6000, uint16(len(c.prgRAM)))
 		c.prgRAM[i] = v
-		return nil
 	default:
 		return errors.New(fmt.Sprintf("oob nrom write at 0x%x", a))
 	}
+	return nil
 }
 
 func (c *nrom) readCHR(a uint16) (uint8, error) {

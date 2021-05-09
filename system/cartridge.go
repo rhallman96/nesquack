@@ -12,9 +12,9 @@ var (
 )
 
 const (
-	prgROMSizeUnit = 0x4000 // 16 KB
-	prgRAMSizeUnit = 0x2000 // 8 KB
-	chrROMSizeUnit = 0x2000
+	prgROMBankSize = 0x4000 // 16 KB
+	prgRAMBankSize = 0x2000 // 8 KB
+	chrBankSize    = 0x2000 // 4 KB
 	headerSize     = 0x10
 	trainerSize    = 0x200
 
@@ -23,7 +23,9 @@ const (
 	prgROMLowAddr  = 0x8000
 	prgROMHighAddr = 0xffff
 
+	// iNES mappers
 	nromHeader = 0x00
+	mmc1Header = 0x01
 )
 
 // cartridge is a memory device with extended functionality for CHR accesses.
@@ -45,8 +47,8 @@ func createCartridge(rom []uint8) (cartridge, error) {
 	if !reflect.DeepEqual(rom[:4], inesPrefix) {
 		return nil, errors.New("rom is not in iNES format")
 	}
-	prgROMSize := int(rom[4]) * prgROMSizeUnit
-	chrROMSize := int(rom[5]) * chrROMSizeUnit
+	prgROMSize := int(rom[4]) * prgROMBankSize
+	chrROMSize := int(rom[5]) * chrBankSize
 	mapper := (rom[7] & 0xf0) | (rom[6] >> 4)
 
 	vMirror := isBitSet(rom[6], 0)
@@ -64,9 +66,9 @@ func createCartridge(rom []uint8) (cartridge, error) {
 	}
 
 	// initialize prgROM, prgRAM, and CHR
-	prgRAMSize := int(rom[8]) * prgRAMSizeUnit
+	prgRAMSize := int(rom[8]) * prgRAMBankSize
 	if prgRAMSize == 0 {
-		prgRAMSize = prgRAMSizeUnit
+		prgRAMSize = prgRAMBankSize
 	}
 
 	prgROMIndex := headerSize
@@ -96,6 +98,14 @@ func createCartridge(rom []uint8) (cartridge, error) {
 			prgRAM: prgRAM,
 			chr:    chr,
 			mirror: ciMirror,
+		}
+	case mmc1Header:
+		c = &mmc1{
+			prgROM:         prgROM,
+			prgRAM:         prgRAM,
+			chr:            chr,
+			mirror:         ciMirror,
+			prgROMBankMode: prgROMBankModeFixLast,
 		}
 	default:
 		return nil, errors.New(fmt.Sprintf("unsupported iNES mapper 0x%x", mapper))
