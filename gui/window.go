@@ -16,7 +16,7 @@ func Launch(rom []uint8) {
 	}
 	defer sdl.Quit()
 
-	window, err := sdl.CreateWindow("nesquack", 0, 0, width, height, sdl.WINDOW_RESIZABLE)
+	window, err := sdl.CreateWindow("nesquack", 0, 0, width, height, 0)
 	if err != nil {
 		panic(err)
 	}
