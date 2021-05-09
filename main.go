@@ -18,7 +18,7 @@ func main() {
 	filename := os.Args[1]
 	rom, err := load(filename)
 	if err != nil {
-		fmt.Println("Failed to load rom from " + filename)
+		fmt.Println("failed to load rom from " + filename)
 		os.Exit(1)
 	}
 
