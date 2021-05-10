@@ -154,7 +154,7 @@ func (c *mmc1) writeCHRHighBankRegister(v uint8) {
 }
 
 func (c *mmc1) writePRGBankRegister(v uint8) {
-	c.prgRAMEnabled = isBitSet(v, 4)
+	c.prgRAMEnabled = !isBitSet(v, 4)
 	c.prgROMBank = int(v & 0xf)
 }
 
