@@ -97,6 +97,8 @@ func (c *mmc1) vramMirror() mirrorMode {
 }
 
 func (c *mmc1) writeShiftRegister(a uint16, v uint8) {
+	// TODO: ignore successive writes for improved compatibility
+
 	if v >= 0x80 {
 		// if bit 7 is set, we revert to the default value
 		c.sr = mmc1SRClearValue

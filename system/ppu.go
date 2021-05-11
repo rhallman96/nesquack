@@ -536,8 +536,9 @@ func (p *ppu) oamDMA(v uint8, bus *cpuBus) error {
 		if err != nil {
 			return err
 		}
-		p.oam[i] = r
+		p.oam[p.oamAddr+uint8(i)] = r
 	}
+
 	p.step(oamDMACycles)
 	return nil
 }
