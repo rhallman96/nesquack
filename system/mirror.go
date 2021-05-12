@@ -14,19 +14,19 @@ const (
 
 // index returns the array index for mirrored name table accesses.
 func (m mirrorMode) index(a, start, mirror uint16) uint16 {
+	i := (a - start) % nameTableSectionSize
 	switch m {
 	case onePage:
-		return (a - start) % mirror
+		return i % mirror
 	case onePageHigh:
-		return mirror + ((a - start) % mirror)
+		return mirror + (i % mirror)
 	case horizontal:
-		i := a - start
 		if i < (2 * mirror) {
 			return i % mirror
 		}
 		return (i % mirror) + mirror
 	case vertical:
-		return (a - start) % (2 * mirror)
+		return i % (2 * mirror)
 	}
 	return 0
 }

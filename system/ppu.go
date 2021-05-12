@@ -8,8 +8,9 @@ const (
 	DrawWidth  = 256
 	DrawHeight = 240
 
-	oamSize       = 0x100
-	nameTableSize = 0x400
+	oamSize              = 0x100
+	nameTableSize        = 0x400
+	nameTableSectionSize = 4 * nameTableSize
 
 	nameTableWidth    = 32
 	nameTableHeight   = 30
@@ -477,8 +478,7 @@ func (p *ppu) writeAddress(v uint8) {
 		p.address |= uint16(v)
 	} else {
 		p.address = (uint16(v) << 8)
-
-		// This is a hack, described in this nesdev wiki thread:
+		// Hack to reset scrolLX and scrollY. See:
 		// http://forums.nesdev.com/viewtopic.php?f=3&t=5365
 		if p.address == 0 {
 			p.scrollX = 0
@@ -495,11 +495,16 @@ func (p *ppu) readData() (uint8, error) {
 		return 0, err
 	}
 
-	// non-palette VRAM is buffered in a separate register, and reads are delayed by one
+	// non-palette VRAM is buffered, and reads are subsequently delayed by one
 	result := r
 	if p.address <= vramHighAddr {
 		result = p.dataReadBuffer
 		p.dataReadBuffer = r
+	} else if p.address <= paletteHighAddr {
+		p.dataReadBuffer, err = p.bus.read(p.address - 0x1000)
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	if p.vramDownInc {
