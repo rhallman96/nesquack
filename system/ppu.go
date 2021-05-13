@@ -368,9 +368,6 @@ func (p *ppu) write(a uint16, v uint8) error {
 		p.writeAddress(v)
 	case 7:
 		return p.writeData(v)
-	default:
-		return nil
-		//return errors.New(fmt.Sprintf("illegal ppu write at offset 0x%x", a))
 	}
 	return nil
 }
