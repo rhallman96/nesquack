@@ -245,22 +245,6 @@ func (p *ppu) drawSprites() error {
 		spriteHeight = largeSpriteHeight
 	}
 
-	// find index of last sprite to draw
-	/*
-		lastSpriteIndex := oamSize - 4
-		spriteCount := 0
-		for i := 0; i < oamSize; i += 4 {
-			y := int(p.oam[i]) - int(p.scrollY)
-			if p.scanline >= y && (y < (p.scanline + spriteHeight)) {
-				spriteCount++
-				if spriteCount == maxSprites {
-					lastSpriteIndex = i
-					break
-				}
-			}
-		}
-	*/
-
 	spriteCount := 0
 	// iterate over sprites in reverse, since earlier sprites are drawn with higher priority
 	for i := 0; i < oamSize; i += 4 {
@@ -297,10 +281,10 @@ func (p *ppu) drawSprites() error {
 		// draw sprite
 		yOffset := p.scanline - y
 		if vFlip {
-			yOffset = (yOffset - (yOffset % 8)) + (7 - (yOffset % 8))
+			yOffset = (yOffset - (yOffset % spriteHeight)) + (spriteHeight - 1 - (yOffset % spriteHeight))
 		}
 
-		patternAddr := patternBaseAddr + (uint16(tileValue) * 16) + uint16(yOffset)
+		patternAddr := patternBaseAddr + ((uint16(tileValue) + (uint16(yOffset) / 8)) * 16) + uint16(yOffset%8)
 		pValueLow, err := p.bus.read(patternAddr)
 		if err != nil {
 			return err
