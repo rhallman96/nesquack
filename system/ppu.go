@@ -48,12 +48,11 @@ type ppu struct {
 	oamAddr uint8
 	oam     [oamSize]uint8
 
-	scrollX, scrollY uint8
-	address          uint16
+	loopyX         uint8
+	loopyT, loopyV uint16
 
 	writeToggle bool
 
-	nameTableBaseAddr  uint16
 	spriteTableAddr    uint16
 	bgPatternTableAddr uint16
 
@@ -113,6 +112,11 @@ func (p *ppu) step(cpuCycles uint64) error {
 		} else if p.dot == dotCount {
 			p.dot = 0
 			p.scanline++
+
+			if p.scanline < DrawHeight && p.showBg && p.showSprites {
+				p.copyScrollX()
+			}
+
 			switch p.scanline {
 			case postRenderLine:
 				p.drawer.CompleteFrame()
@@ -125,6 +129,9 @@ func (p *ppu) step(cpuCycles uint64) error {
 				p.vBlankPeriod = false
 				p.scanline = 0
 				p.frame++
+				if p.showBg && p.showSprites {
+					p.loopyV = p.loopyT
+				}
 			}
 		}
 	}
@@ -150,8 +157,8 @@ func (p *ppu) drawTiles() error {
 		}
 
 		// get tile value
-		pixelX := dot + int(p.scrollX)
-		pixelY := p.scanline + int(p.scrollY)
+		pixelX := dot + int(p.scrollX())
+		pixelY := p.scanline + int(p.scrollY())
 		tileX := pixelX / 8
 		tileY := pixelY / 8
 
@@ -160,7 +167,7 @@ func (p *ppu) drawTiles() error {
 		tileIndex += ((tileX / nameTableWidth) * int(nameTableSize))
 		tileIndex += ((tileY / nameTableHeight) * 2 * int(nameTableSize))
 
-		tileValue, err := p.bus.read(p.nameTableBaseAddr + uint16(tileIndex))
+		tileValue, err := p.bus.read(p.nameTableBaseAddr() + uint16(tileIndex))
 		if err != nil {
 			return err
 		}
@@ -192,7 +199,7 @@ func (p *ppu) drawTiles() error {
 		p.bgPixelDrawn[dot] = true
 
 		// get palette
-		at := p.nameTableBaseAddr + uint16((tileIndex/nameTableGridSize)*nameTableSize)
+		at := p.nameTableBaseAddr() + uint16((tileIndex/nameTableGridSize)*nameTableSize)
 		at += nameTableGridSize
 
 		atIndexX := (tileX % nameTableWidth) / 4
@@ -370,7 +377,7 @@ func (p *ppu) read(a uint16) (uint8, error) {
 }
 
 func (p *ppu) writeCtrl(v uint8) {
-	p.nameTableBaseAddr = vramLowAddr + (uint16(v&0x03) * nameTableSize)
+	p.writeNameTableBaseAddr(v)
 	p.vramDownInc = isBitSet(v, 2)
 
 	if isBitSet(v, 3) {
@@ -446,52 +453,49 @@ func (p *ppu) writeOamData(v uint8) {
 func (p *ppu) writeScroll(v uint8) {
 	p.lastWrite = v
 	if p.writeToggle {
-		p.scrollY = v
+		p.writeScrollY(v)
 	} else {
-		p.scrollX = v
+		p.writeScrollX(v)
 	}
 	p.writeToggle = !p.writeToggle
 }
 
 func (p *ppu) writeAddress(v uint8) {
+	// TODO
 	p.lastWrite = v
 	if p.writeToggle {
-		p.address |= uint16(v)
+		p.loopyT &= 0xff00
+		p.loopyT |= uint16(v)
+		p.loopyV = p.loopyT
 	} else {
-		p.address = (uint16(v) << 8)
-		// Hack to reset scrolLX and scrollY. See:
-		// http://forums.nesdev.com/viewtopic.php?f=3&t=5365
-		if p.address == 0 {
-			p.scrollX = 0
-			p.scrollY = 0
-			p.nameTableBaseAddr = 0x2000
-		}
+		p.loopyT &= 0xff
+		p.loopyT |= (uint16(v&0x3f) << 8)
 	}
 	p.writeToggle = !p.writeToggle
 }
 
 func (p *ppu) readData() (uint8, error) {
-	r, err := p.bus.read(p.address)
+	r, err := p.bus.read(p.loopyV)
 	if err != nil {
 		return 0, err
 	}
 
 	// non-palette VRAM is buffered, and reads are subsequently delayed by one
 	result := r
-	if p.address <= vramHighAddr {
+	if p.loopyV <= vramHighAddr {
 		result = p.dataReadBuffer
 		p.dataReadBuffer = r
-	} else if p.address <= paletteHighAddr {
-		p.dataReadBuffer, err = p.bus.read(p.address - 0x1000)
+	} else if p.loopyV <= paletteHighAddr {
+		p.dataReadBuffer, err = p.bus.read(p.loopyV - 0x1000)
 		if err != nil {
 			return 0, err
 		}
 	}
 
 	if p.vramDownInc {
-		p.address += vramDown
+		p.loopyV += vramDown
 	} else {
-		p.address++
+		p.loopyV++
 	}
 
 	return result, nil
@@ -499,15 +503,15 @@ func (p *ppu) readData() (uint8, error) {
 
 func (p *ppu) writeData(v uint8) error {
 	p.lastWrite = v
-	err := p.bus.write(p.address, v)
+	err := p.bus.write(p.loopyV, v)
 	if err != nil {
 		return err
 	}
 
 	if p.vramDownInc {
-		p.address += vramDown
+		p.loopyV += vramDown
 	} else {
-		p.address++
+		p.loopyV++
 	}
 
 	return nil
@@ -527,4 +531,40 @@ func (p *ppu) oamDMA(v uint8, bus *cpuBus) error {
 
 	p.step(oamDMACycles)
 	return nil
+}
+
+func (p *ppu) writeScrollX(v uint8) {
+	p.loopyT &= 0xffe0
+	p.loopyT |= uint16(v >> 3)
+	p.loopyX = v & 0x7
+}
+
+func (p *ppu) scrollX() uint8 {
+	return (uint8(p.loopyV&0x1f) << 3) | p.loopyX
+}
+
+func (p *ppu) writeScrollY(v uint8) {
+	p.loopyT &= 0x8fff
+	p.loopyT |= (uint16(v&0x7) << 12)
+	p.loopyT &= 0xfc1f
+	p.loopyT |= (uint16(v&0xf8) << 2)
+}
+
+func (p *ppu) scrollY() uint8 {
+	r := (p.loopyV >> 2) & 0xf8
+	r |= ((p.loopyV >> 12) & 0x7)
+	return uint8(r)
+}
+
+func (p *ppu) writeNameTableBaseAddr(v uint8) {
+	p.loopyT &= 0xf3ff
+	p.loopyT |= (uint16(v&0x3) << 10)
+}
+
+func (p *ppu) nameTableBaseAddr() uint16 {
+	return vramLowAddr + (((p.loopyV >> 10) & 0x3) * nameTableSize)
+}
+
+func (p *ppu) copyScrollX() {
+	p.loopyV = (p.loopyV & 0xfbe0) | (p.loopyT & 0x041f)
 }
