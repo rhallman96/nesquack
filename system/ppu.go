@@ -109,6 +109,10 @@ func (p *ppu) step(cpuCycles uint64) error {
 			if err != nil {
 				return err
 			}
+
+			if p.showBg && p.showSprites {
+				p.incScrollY()
+			}
 		} else if p.dot == dotCount {
 			p.dot = 0
 			p.scanline++
@@ -158,7 +162,7 @@ func (p *ppu) drawTiles() error {
 
 		// get tile value
 		pixelX := dot + int(p.scrollX())
-		pixelY := p.scanline + int(p.scrollY())
+		pixelY := int(p.scrollY())
 		tileX := pixelX / 8
 		tileY := pixelY / 8
 
@@ -259,7 +263,7 @@ func (p *ppu) drawSprites() error {
 			break
 		}
 		y := int(p.oam[i]) + 1
-		if (p.scanline < y) || (p.scanline >= y+spriteHeight) {
+		if (int(p.scrollY()) < y) || (int(p.scrollY()) >= y+spriteHeight) {
 			continue
 		}
 		spriteCount++
@@ -286,7 +290,7 @@ func (p *ppu) drawSprites() error {
 		}
 
 		// draw sprite
-		yOffset := p.scanline - y
+		yOffset := int(p.scrollY()) - y
 		if vFlip {
 			yOffset = (yOffset - (yOffset % spriteHeight)) + (spriteHeight - 1 - (yOffset % spriteHeight))
 		}
@@ -565,6 +569,27 @@ func (p *ppu) nameTableBaseAddr() uint16 {
 	return vramLowAddr + (((p.loopyV >> 10) & 0x3) * nameTableSize)
 }
 
+// copyScrollX copies the x scroll contents of the temp register into the v register.
+// This is called at the beginning of every scanline.
 func (p *ppu) copyScrollX() {
 	p.loopyV = (p.loopyV & 0xfbe0) | (p.loopyT & 0x041f)
+}
+
+// incScrollY increments the scroll y coordinate. This is called at dot 256 of each scanline.
+func (p *ppu) incScrollY() {
+	if (p.loopyV & 0x7000) != 0x7000 {
+		p.loopyV += 0x1000
+	} else {
+		p.loopyV &= 0x8fff
+		y := (p.loopyV & 0x03e0) >> 5
+		if y == 29 {
+			y = 0
+			p.loopyV ^= 0x0800
+		} else if y == 31 {
+			y = 0
+		} else {
+			y++
+		}
+		p.loopyV = (p.loopyV & 0xfc1f) | (y << 5)
+	}
 }
