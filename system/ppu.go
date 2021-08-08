@@ -263,7 +263,7 @@ func (p *ppu) drawSprites() error {
 			break
 		}
 		y := int(p.oam[i]) + 1
-		if (int(p.scrollY()) < y) || (int(p.scrollY()) >= y+spriteHeight) {
+		if (p.scanline < y) || (p.scanline >= y+spriteHeight) {
 			continue
 		}
 		spriteCount++
@@ -290,7 +290,7 @@ func (p *ppu) drawSprites() error {
 		}
 
 		// draw sprite
-		yOffset := int(p.scrollY()) - y
+		yOffset := p.scanline - y
 		if vFlip {
 			yOffset = (yOffset - (yOffset % spriteHeight)) + (spriteHeight - 1 - (yOffset % spriteHeight))
 		}
