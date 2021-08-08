@@ -16,7 +16,7 @@ const (
 	nameTableHeight   = 30
 	nameTableGridSize = nameTableWidth * nameTableHeight
 
-	scanlineCount  = 261
+	scanlineCount  = 262
 	dotCount       = 341
 	postRenderLine = 240
 
@@ -100,6 +100,10 @@ func (p *ppu) step(cpuCycles uint64) error {
 			p.dot++
 		}
 
+		if p.showSprites && p.showBg && (p.scanline == scanlineCount-1) && (p.dot >= 280 && p.dot <= 304) {
+			p.copyScrollY()
+		}
+
 		if p.dot == DrawWidth && (p.scanline < DrawHeight) {
 			err := p.drawTiles()
 			if err != nil {
@@ -132,10 +136,8 @@ func (p *ppu) step(cpuCycles uint64) error {
 			case scanlineCount:
 				p.vBlankPeriod = false
 				p.scanline = 0
+
 				p.frame++
-				if p.showBg && p.showSprites {
-					p.loopyV = p.loopyT
-				}
 			}
 		}
 	}
@@ -465,7 +467,6 @@ func (p *ppu) writeScroll(v uint8) {
 }
 
 func (p *ppu) writeAddress(v uint8) {
-	// TODO
 	p.lastWrite = v
 	if p.writeToggle {
 		p.loopyT &= 0xff00
@@ -570,9 +571,15 @@ func (p *ppu) nameTableBaseAddr() uint16 {
 }
 
 // copyScrollX copies the x scroll contents of the temp register into the v register.
-// This is called at the beginning of every scanline.
+// This is called at dot 257 of every scanline.
 func (p *ppu) copyScrollX() {
 	p.loopyV = (p.loopyV & 0xfbe0) | (p.loopyT & 0x041f)
+}
+
+// copyScrollY copies the y scroll contents of the temp register into the v register.
+// This is called between dots 280 and 304 of the pre-render scanline.
+func (p *ppu) copyScrollY() {
+	p.loopyV = (p.loopyV & 0x041f) | (p.loopyT & 0xfbe0)
 }
 
 // incScrollY increments the scroll y coordinate. This is called at dot 256 of each scanline.
