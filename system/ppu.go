@@ -100,7 +100,7 @@ func (p *ppu) step(cpuCycles uint64) error {
 			p.dot++
 		}
 
-		if p.showSprites && p.showBg && (p.scanline == scanlineCount-1) && (p.dot >= 280 && p.dot <= 304) {
+		if p.renderEnabled() && (p.scanline == scanlineCount-1) && (p.dot >= 280 && p.dot <= 304) {
 			p.copyScrollY()
 		}
 
@@ -114,14 +114,14 @@ func (p *ppu) step(cpuCycles uint64) error {
 				return err
 			}
 
-			if p.showBg && p.showSprites {
+			if p.renderEnabled() {
 				p.incScrollY()
 			}
 		} else if p.dot == dotCount {
 			p.dot = 0
 			p.scanline++
 
-			if p.scanline < DrawHeight && p.showBg && p.showSprites {
+			if p.scanline < DrawHeight && p.renderEnabled() {
 				p.copyScrollX()
 			}
 
@@ -142,6 +142,10 @@ func (p *ppu) step(cpuCycles uint64) error {
 		}
 	}
 	return nil
+}
+
+func (p *ppu) renderEnabled() bool {
+	return p.showBg && p.showSprites
 }
 
 func (p *ppu) drawTiles() error {
@@ -580,6 +584,17 @@ func (p *ppu) copyScrollX() {
 // This is called between dots 280 and 304 of the pre-render scanline.
 func (p *ppu) copyScrollY() {
 	p.loopyV = (p.loopyV & 0x041f) | (p.loopyT & 0xfbe0)
+}
+
+// incCoarseX increments the coarse x register for each tile when a scanline is
+// rendered. (i.e., once every 8 pixels)
+func (p *ppu) incCoarseX() {
+	if (p.loopyV & 0x001f) == 31 {
+		p.loopyV &= 0xffe0
+		p.loopyV ^= 0x0400
+	} else {
+		p.loopyV += 1
+	}
 }
 
 // incScrollY increments the scroll y coordinate. This is called at dot 256 of each scanline.
