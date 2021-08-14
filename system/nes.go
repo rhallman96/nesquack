@@ -1,6 +1,12 @@
 package system
 
-type NES struct {
+// NES represents the system at its highest level.
+type NES interface {
+	// Step executes a single instruction within the NES CPU.
+	Step() error
+}
+
+type nes struct {
 	cpu *cpu
 	ppu *ppu
 
@@ -9,7 +15,7 @@ type NES struct {
 }
 
 // NewNES constructs a new NES
-func NewNES(rom []uint8, drawer Drawer, c1 Controller) (*NES, error) {
+func NewNES(rom []uint8, drawer Drawer, c1 Controller) (NES, error) {
 	cartridge, err := createCartridge(rom)
 	if err != nil {
 		return nil, err
@@ -32,7 +38,7 @@ func NewNES(rom []uint8, drawer Drawer, c1 Controller) (*NES, error) {
 	// TODO: investigate more elegant way of instantiating
 	ppu.cpu = cpu
 
-	return &NES{
+	return &nes{
 		cpu: cpu,
 		ppu: ppu,
 	}, nil
@@ -40,7 +46,7 @@ func NewNES(rom []uint8, drawer Drawer, c1 Controller) (*NES, error) {
 
 // Step fetches and executes one instruction on the NES's CPU.
 // The PPU, MMU and all other peripherals will be updated accordingly.
-func (n *NES) Step() error {
+func (n *nes) Step() error {
 	prevCycles := n.cpu.clock
 	err := n.cpu.step()
 	if err != nil {
