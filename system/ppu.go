@@ -167,7 +167,9 @@ func (p *ppu) drawTiles() error {
 		}
 
 		// get tile value
-		pixelX := dot + int(p.scrollX())
+
+		fineX := (int(p.loopyX) + dot) % 8
+		pixelX := int((p.loopyV&0x1f)<<3) + fineX
 		pixelY := int(p.scrollY())
 		tileX := pixelX / 8
 		tileY := pixelY / 8
@@ -203,6 +205,9 @@ func (p *ppu) drawTiles() error {
 
 		// pixels with a zero value are transparent
 		if cIndex == 0 {
+			if fineX == 7 {
+				p.incCoarseX()
+			}
 			continue
 		}
 
@@ -245,6 +250,10 @@ func (p *ppu) drawTiles() error {
 			return err
 		}
 		p.drawer.DrawPixel(dot, p.scanline, palette[color])
+
+		if fineX == 7 {
+			p.incCoarseX()
+		}
 	}
 
 	return nil
