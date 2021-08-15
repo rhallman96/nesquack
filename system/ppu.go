@@ -163,24 +163,30 @@ func (p *ppu) drawTiles() error {
 		p.bgPixelDrawn[dot] = false
 		p.drawer.DrawPixel(dot, p.scanline, palette[bgColor])
 
-		if !p.showBgLeft && dot < 8 {
-			continue
-		}
-
 		// get tile value
 		fineX := (int(p.loopyX) + dot) % 8
 		pixelX := int((p.loopyV&0x1f)<<3) + fineX
 		pixelY := int(p.scrollY())
 		tileX := pixelX / 8
 		tileY := pixelY / 8
-
 		tileAddress := uint16(0x2000 | (p.loopyV & 0x0FFF))
+		attributeAddr := 0x23C0 | (p.loopyV & 0x0C00) | ((p.loopyV >> 4) & 0x38) | ((p.loopyV >> 2) & 0x07)
+
+		// increment coarse X every 8 pixels (done after loopyV scroll value is fetched)
+		if fineX == 7 {
+			p.incCoarseX()
+		}
+
+		// don't draw left 8 pixels when left rendering is disabled
+		if !p.showBgLeft && dot < 8 {
+			continue
+		}
+
+		// get tile pixel color
 		tileValue, err := p.bus.read(tileAddress)
 		if err != nil {
 			return err
 		}
-
-		// get tile pixel color
 		patternAddr := p.bgPatternTableAddr + (uint16(tileValue) * 16) + uint16(pixelY%8)
 		pValueLow, err := p.bus.read(patternAddr)
 		if err != nil {
@@ -201,16 +207,12 @@ func (p *ppu) drawTiles() error {
 
 		// pixels with a zero value are transparent
 		if cIndex == 0 {
-			if fineX == 7 {
-				p.incCoarseX()
-			}
 			continue
 		}
 
 		p.bgPixelDrawn[dot] = true
 
 		// get tile palette
-		attributeAddr := 0x23C0 | (p.loopyV & 0x0C00) | ((p.loopyV >> 4) & 0x38) | ((p.loopyV >> 2) & 0x07)
 		c, err := p.bus.read(attributeAddr)
 		if err != nil {
 			return err
@@ -240,10 +242,6 @@ func (p *ppu) drawTiles() error {
 			return err
 		}
 		p.drawer.DrawPixel(dot, p.scanline, palette[color])
-
-		if fineX == 7 {
-			p.incCoarseX()
-		}
 	}
 
 	return nil
