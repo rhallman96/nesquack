@@ -105,6 +105,7 @@ func (p *ppu) step(cpuCycles uint64) error {
 		}
 
 		if p.dot == DrawWidth && (p.scanline < DrawHeight) {
+			// end of visible portion of scanline
 			err := p.drawTiles()
 			if err != nil {
 				return err
@@ -118,6 +119,7 @@ func (p *ppu) step(cpuCycles uint64) error {
 				p.incScrollY()
 			}
 		} else if p.dot == dotCount {
+			// begin new scanline
 			p.dot = 0
 			p.scanline++
 
@@ -136,7 +138,6 @@ func (p *ppu) step(cpuCycles uint64) error {
 			case scanlineCount:
 				p.vBlankPeriod = false
 				p.scanline = 0
-
 				p.frame++
 			}
 		}
@@ -167,19 +168,14 @@ func (p *ppu) drawTiles() error {
 		}
 
 		// get tile value
-
 		fineX := (int(p.loopyX) + dot) % 8
 		pixelX := int((p.loopyV&0x1f)<<3) + fineX
 		pixelY := int(p.scrollY())
 		tileX := pixelX / 8
 		tileY := pixelY / 8
 
-		tileIndex := (tileY % nameTableHeight) * nameTableWidth
-		tileIndex += (tileX % nameTableWidth)
-		tileIndex += ((tileX / nameTableWidth) * int(nameTableSize))
-		tileIndex += ((tileY / nameTableHeight) * 2 * int(nameTableSize))
-
-		tileValue, err := p.bus.read(p.nameTableBaseAddr() + uint16(tileIndex))
+		tileAddress := uint16(0x2000 | (p.loopyV & 0x0FFF))
+		tileValue, err := p.bus.read(tileAddress)
 		if err != nil {
 			return err
 		}
@@ -213,15 +209,9 @@ func (p *ppu) drawTiles() error {
 
 		p.bgPixelDrawn[dot] = true
 
-		// get palette
-		at := p.nameTableBaseAddr() + uint16((tileIndex/nameTableGridSize)*nameTableSize)
-		at += nameTableGridSize
-
-		atIndexX := (tileX % nameTableWidth) / 4
-		atIndexY := (tileY % nameTableHeight) / 4
-		atAddr := at + uint16((atIndexY*8)+atIndexX)
-
-		c, err := p.bus.read(atAddr)
+		// get tile palette
+		attributeAddr := 0x23C0 | (p.loopyV & 0x0C00) | ((p.loopyV >> 4) & 0x38) | ((p.loopyV >> 2) & 0x07)
+		c, err := p.bus.read(attributeAddr)
 		if err != nil {
 			return err
 		}
