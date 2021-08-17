@@ -106,6 +106,7 @@ func createCartridge(rom []uint8) (cartridge, error) {
 			chr:            chr,
 			mirror:         ciMirror,
 			prgROMBankMode: prgROMBankModeFixLast,
+			prgRAMEnabled:  true,
 		}
 	default:
 		return nil, errors.New(fmt.Sprintf("unsupported iNES mapper 0x%x", mapper))

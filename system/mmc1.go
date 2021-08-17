@@ -55,7 +55,6 @@ func (c *mmc1) read(a uint16) (uint8, error) {
 	default:
 		return 0, errors.New(fmt.Sprintf("oob mmc1 read at 0x%x", a))
 	}
-	return 0, nil
 }
 
 func (c *mmc1) write(a uint16, v uint8) error {
