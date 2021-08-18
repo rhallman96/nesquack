@@ -95,7 +95,7 @@ func (p *ppu) step(cpuCycles uint64) error {
 		p.dot++
 
 		// when rendering is enabled, the ppu skips an additional tick every odd frame
-		if (p.showSprites || p.showBg) && (p.frame%2 == 1) &&
+		if p.renderEnabled() && (p.frame%2 == 1) &&
 			(p.dot == dotCount-2) && (p.scanline == scanlineCount-1) {
 			p.dot++
 		}
@@ -146,7 +146,7 @@ func (p *ppu) step(cpuCycles uint64) error {
 }
 
 func (p *ppu) renderEnabled() bool {
-	return p.showBg && p.showSprites
+	return p.showBg || p.showSprites
 }
 
 func (p *ppu) drawTiles() error {
