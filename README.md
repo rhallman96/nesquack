@@ -1,5 +1,5 @@
 # nesquack
-An NES emulator written in Golang. Quack quack!
+An NES emulator written in Golang. Quack quack! 🦆
 
 ## Controls
 ### NES Gamepad 1
@@ -15,7 +15,7 @@ An NES emulator written in Golang. Quack quack!
 
 ## Acknowledgements
 * Thank you to the [nesdev community](https://wiki.nesdev.com) for extensive hardware documentation.
-* blargg for his [extensive suite](https://wiki.nesdev.com/w/index.php/Emulator_tests) of test ROMs.
+* blargg for his [suite](https://wiki.nesdev.com/w/index.php/Emulator_tests) of test ROMs.
 
 ## Gallery
 
