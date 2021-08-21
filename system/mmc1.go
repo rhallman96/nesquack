@@ -53,7 +53,8 @@ func (c *mmc1) read(a uint16) (uint8, error) {
 	case a >= prgROMLowAddr:
 		return c.readPRG(a)
 	default:
-		return 0, errors.New(fmt.Sprintf("oob mmc1 read at 0x%x", a))
+		const oobRead = "oob mmc1 read at 0x%x"
+		return 0, errors.New(fmt.Sprintf(oobRead, a))
 	}
 }
 
@@ -67,7 +68,8 @@ func (c *mmc1) write(a uint16, v uint8) error {
 	case a >= prgROMLowAddr:
 		c.writeShiftRegister(a, v)
 	default:
-		return errors.New(fmt.Sprintf("oob mmc1 write at 0x%x", a))
+		const oobWrite = "oob mmc1 write at 0x%x"
+		return errors.New(fmt.Sprintf(oobWrite, a))
 	}
 	return nil
 }

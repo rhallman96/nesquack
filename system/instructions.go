@@ -348,8 +348,8 @@ func bpl(c *cpu, bus memoryDevice, a uint16) error {
 }
 
 func brk(c *cpu, bus memoryDevice, a uint16) error {
-	c.setFlag(flagBreak)
-	return c.interrupt(bus, 0xfffe)
+	c.pc++
+	return c.interrupt(bus, 0xfffe, true)
 }
 
 func bvc(c *cpu, bus memoryDevice, a uint16) error {
@@ -571,9 +571,7 @@ func pha(c *cpu, bus memoryDevice, a uint16) error {
 }
 
 func php(c *cpu, bus memoryDevice, a uint16) error {
-	c.setFlag(flagBreakHi)
-	c.setFlag(flagBreak)
-	return c.push(bus, c.p)
+	return c.push(bus, c.p|0x30)
 }
 
 func pla(c *cpu, bus memoryDevice, a uint16) error {
@@ -592,7 +590,7 @@ func plp(c *cpu, bus memoryDevice, a uint16) error {
 	if err != nil {
 		return err
 	}
-	c.p = v
+	c.p = v & 0xcf
 	return nil
 }
 
@@ -657,7 +655,7 @@ func rti(c *cpu, bus memoryDevice, a uint16) error {
 	if err != nil {
 		return err
 	}
-	c.p = v
+	c.p = v & 0xcf
 	addr, err := c.pullWord(bus)
 	if err != nil {
 		return err

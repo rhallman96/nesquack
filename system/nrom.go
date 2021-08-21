@@ -26,7 +26,8 @@ func (c *nrom) read(a uint16) (uint8, error) {
 		i := mirrorIndex(a, prgROMLowAddr, uint16(len(c.prgROM)))
 		return c.prgROM[i], nil
 	default:
-		return 0, errors.New(fmt.Sprintf("oob nrom read at 0x%x", a))
+		const oobRead = "oob nrom read at 0x%x"
+		return 0, errors.New(fmt.Sprintf(oobRead, a))
 	}
 }
 
@@ -36,7 +37,8 @@ func (c *nrom) write(a uint16, v uint8) error {
 		i := mirrorIndex(a, 0x6000, uint16(len(c.prgRAM)))
 		c.prgRAM[i] = v
 	default:
-		return errors.New(fmt.Sprintf("oob nrom write at 0x%x", a))
+		const oobWrite = "oob nrom write at 0x%x"
+		return errors.New(fmt.Sprintf(oobWrite, a))
 	}
 	return nil
 }

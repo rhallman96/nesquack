@@ -88,12 +88,12 @@ func (c *cpu) step() error {
 		c.clock += interruptCycles
 		// indicates that the interrupt was not handled during a brk instruction
 		c.setFlagValue(flagBreak, false)
-		err = c.interrupt(c.bus, nmiVector)
+		err = c.interrupt(c.bus, nmiVector, false)
 		c.nmi = false
 	} else if !c.isFlagSet(flagInterrupt) && c.irq {
 		c.clock += interruptCycles
 		c.setFlagValue(flagBreak, false)
-		err = c.interrupt(c.bus, irqVector)
+		err = c.interrupt(c.bus, irqVector, false)
 	}
 
 	return err
@@ -112,15 +112,23 @@ func (c *cpu) triggerNMI() {
 	c.nmi = true
 }
 
-func (c *cpu) interrupt(bus memoryDevice, v uint16) error {
+func (c *cpu) interrupt(bus memoryDevice, v uint16, isBreak bool) error {
 	err := c.pushWord(bus, c.pc)
 	c.pc++
 	if err != nil {
 		return err
 	}
-	c.setFlag(flagBreakHi)
+
+	status := c.p | flagBreakHi
+	if isBreak {
+		status |= 0x30
+	} else {
+		status &= 0xef
+	}
+
+	c.push(bus, status)
 	c.setFlag(flagInterrupt)
-	c.push(bus, c.p)
+
 	dest, err := readWord(bus, v)
 	if err != nil {
 		return err
