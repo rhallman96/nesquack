@@ -48,13 +48,11 @@ func (c *mmc1) read(a uint16) (uint8, error) {
 		if !c.prgRAMEnabled {
 			return 0, nil
 		}
-		i := mirrorIndex(a, 0x6000, uint16(len(c.prgRAM)))
-		return c.prgRAM[i], nil
+		return c.prgRAM[a-prgRAMLowAddr], nil
 	case a >= prgROMLowAddr:
 		return c.readPRG(a)
 	default:
-		const oobRead = "oob mmc1 read at 0x%x"
-		return 0, errors.New(fmt.Sprintf(oobRead, a))
+		return 0, errors.New(fmt.Sprintf("oob mmc1 read at 0x%x", a))
 	}
 }
 
@@ -68,8 +66,7 @@ func (c *mmc1) write(a uint16, v uint8) error {
 	case a >= prgROMLowAddr:
 		c.writeShiftRegister(a, v)
 	default:
-		const oobWrite = "oob mmc1 write at 0x%x"
-		return errors.New(fmt.Sprintf(oobWrite, a))
+		return errors.New(fmt.Sprintf("oob mmc1 write at 0x%x", a))
 	}
 	return nil
 }

@@ -6,6 +6,7 @@ type mirrorMode int
 
 // mirroring modes
 const (
+	// TODO - add support for four page mirroring
 	onePage = iota
 	horizontal
 	vertical

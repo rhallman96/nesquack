@@ -123,7 +123,8 @@ func (p *ppu) step(cpuCycles uint64) error {
 			p.dot = 0
 			p.scanline++
 
-			if p.scanline < DrawHeight && p.renderEnabled() {
+			if ((p.scanline < DrawHeight) || (p.scanline == scanlineCount-1)) &&
+				p.renderEnabled() {
 				p.copyScrollX()
 			}
 
@@ -238,6 +239,7 @@ func (p *ppu) drawTiles() error {
 
 		var pIndex uint16 = paletteLowAddr + uint16(c*4) + uint16(cIndex)
 		color, err := p.bus.read(pIndex)
+
 		if err != nil {
 			return err
 		}
@@ -261,7 +263,7 @@ func (p *ppu) drawSprites() error {
 
 	spriteCount := 0
 	// iterate over sprites in reverse, since earlier sprites are drawn with higher priority
-	for i := 0; i < oamSize; i += 4 {
+	for i := oamSize - 4; i >= 0; i -= 4 {
 		if spriteCount == maxSprites {
 			break
 		}
@@ -276,7 +278,7 @@ func (p *ppu) drawSprites() error {
 			continue
 		}
 
-		inFront := isBitSet(p.oam[i+2], 5)
+		inFront := !isBitSet(p.oam[i+2], 5)
 		pIndex := p.oam[i+2] & 0x3
 		hFlip := isBitSet(p.oam[i+2], 6)
 		vFlip := isBitSet(p.oam[i+2], 7)
@@ -309,13 +311,13 @@ func (p *ppu) drawSprites() error {
 		}
 
 		for ix := 0; ix < 8; ix++ {
+			if x+ix >= DrawWidth {
+				break
+			}
+
 			xOffset := ix
 			if hFlip {
 				xOffset = 7 - ix
-			}
-
-			if x+xOffset >= DrawWidth {
-				continue
 			}
 
 			var cIndex int = 0
@@ -331,7 +333,7 @@ func (p *ppu) drawSprites() error {
 				continue
 			}
 
-			if (i == 0) && (p.bgPixelDrawn[x+xOffset]) {
+			if (i == 0) && (p.bgPixelDrawn[x+ix]) {
 				p.spriteZeroHit = true
 			}
 
@@ -341,7 +343,7 @@ func (p *ppu) drawSprites() error {
 				return err
 			}
 
-			if !(inFront && p.bgPixelDrawn[x+xOffset]) {
+			if inFront || !p.bgPixelDrawn[x+ix] {
 				p.drawer.DrawPixel(x+ix, p.scanline, palette[color])
 			}
 		}

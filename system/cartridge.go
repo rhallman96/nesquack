@@ -21,11 +21,11 @@ const (
 	prgRAMLowAddr  = 0x6000
 	prgRAMHighAddr = 0x7fff
 	prgROMLowAddr  = 0x8000
-	prgROMHighAddr = 0xffff
 
 	// iNES mappers
 	nromHeader = 0x00
 	mmc1Header = 0x01
+	mmc3Header = 0x04
 )
 
 // cartridge is a memory device with extended functionality for CHR accesses.
@@ -84,6 +84,7 @@ func createCartridge(rom []uint8) (cartridge, error) {
 		chr = make([]uint8, 0x2000)
 	}
 
+	log.Printf("iNES mapper %d", mapper)
 	log.Printf("PRG ROM: %d bytes", len(prgROM))
 	log.Printf("PRG RAM: %d bytes", len(prgRAM))
 	log.Printf("CHR: %d bytes", len(chr))
@@ -107,6 +108,13 @@ func createCartridge(rom []uint8) (cartridge, error) {
 			mirror:         ciMirror,
 			prgROMBankMode: prgROMBankModeFixLast,
 			prgRAMEnabled:  true,
+		}
+	case mmc3Header:
+		c = &mmc3{
+			prgROM: prgROM,
+			prgRAM: prgRAM,
+			chr:    chr,
+			mirror: ciMirror,
 		}
 	default:
 		return nil, errors.New(fmt.Sprintf("unsupported iNES mapper 0x%x", mapper))
