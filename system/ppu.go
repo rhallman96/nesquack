@@ -61,9 +61,9 @@ type ppu struct {
 	vblankNMI           bool
 	vramDownInc         bool
 	grayscale           bool
-	showBgLeft          bool
+	showTilesLeft       bool
 	showSpritesLeft     bool
-	showBg              bool
+	showTiles           bool
 	showSprites         bool
 	eRed, eGreen, eBlue bool
 	spriteZeroHit       bool
@@ -94,14 +94,17 @@ func (p *ppu) step(cpuCycles uint64) error {
 	for i := uint64(0); i < cycles; i++ {
 		p.dot++
 
-		// when rendering is enabled, the ppu skips an additional tick every odd frame
-		if p.renderEnabled() && (p.frame%2 == 1) &&
-			(p.dot == dotCount-2) && (p.scanline == scanlineCount-1) {
-			p.dot++
-		}
-
-		if p.renderEnabled() && (p.scanline == scanlineCount-1) && (p.dot >= 280 && p.dot <= 304) {
-			p.copyScrollY()
+		if p.renderEnabled() {
+			if p.scanline == scanlineCount-1 {
+				// when rendering is enabled, the ppu skips an additional tick every odd frame
+				if (p.frame%2 == 1) && (p.dot == dotCount-2) {
+					p.dot++
+				}
+				// the y value of loopyT is copied on the last scanline repeatedly
+				if p.dot >= 280 && p.dot <= 304 {
+					p.copyScrollY()
+				}
+			}
 		}
 
 		if p.dot == DrawWidth && (p.scanline < DrawHeight) {
@@ -123,20 +126,19 @@ func (p *ppu) step(cpuCycles uint64) error {
 			p.dot = 0
 			p.scanline++
 
-			if ((p.scanline < DrawHeight) || (p.scanline == scanlineCount-1)) &&
-				p.renderEnabled() {
-				p.copyScrollX()
-			}
-
-			switch p.scanline {
-			case postRenderLine:
+			switch {
+			case ((p.scanline < DrawHeight) || (p.scanline == scanlineCount-1)):
+				if p.renderEnabled() {
+					p.copyScrollX()
+				}
+			case p.scanline == postRenderLine:
 				p.drawer.CompleteFrame()
-			case postRenderLine + 1:
+			case p.scanline == postRenderLine+1:
 				p.vBlankPeriod = true
 				if p.vblankNMI {
 					p.cpu.triggerNMI()
 				}
-			case scanlineCount:
+			case p.scanline == scanlineCount:
 				p.vBlankPeriod = false
 				p.scanline = 0
 				p.frame++
@@ -147,14 +149,10 @@ func (p *ppu) step(cpuCycles uint64) error {
 }
 
 func (p *ppu) renderEnabled() bool {
-	return p.showBg || p.showSprites
+	return p.showTiles || p.showSprites
 }
 
 func (p *ppu) drawTiles() error {
-	if !p.showBg {
-		return nil
-	}
-
 	bgColor, err := p.bus.read(paletteLowAddr)
 	if err != nil {
 		return err
@@ -164,6 +162,11 @@ func (p *ppu) drawTiles() error {
 		p.bgPixelDrawn[dot] = false
 		p.drawer.DrawPixel(dot, p.scanline, palette[bgColor])
 
+		// only draw the background color if tile rendering is disabled
+		if (!p.showTiles) || (!p.showTilesLeft && dot < 8) {
+			continue
+		}
+
 		// get tile value
 		fineX := (int(p.loopyX) + dot) % 8
 		pixelX := int((p.loopyV&0x1f)<<3) + fineX
@@ -171,16 +174,11 @@ func (p *ppu) drawTiles() error {
 		tileX := pixelX / 8
 		tileY := pixelY / 8
 		tileAddress := uint16(0x2000 | (p.loopyV & 0x0FFF))
-		attributeAddr := 0x23C0 | (p.loopyV & 0x0C00) | ((p.loopyV >> 4) & 0x38) | ((p.loopyV >> 2) & 0x07)
+		attributeAddr := 0x23C0 | (p.loopyV & 0x0c00) | ((p.loopyV >> 4) & 0x38) | ((p.loopyV >> 2) & 0x07)
 
 		// increment coarse X every 8 pixels (done after loopyV scroll value is fetched)
 		if fineX == 7 {
 			p.incCoarseX()
-		}
-
-		// don't draw left 8 pixels when left rendering is disabled
-		if !p.showBgLeft && dot < 8 {
-			continue
 		}
 
 		// get tile pixel color
@@ -409,9 +407,9 @@ func (p *ppu) writeCtrl(v uint8) {
 
 func (p *ppu) writeMask(v uint8) {
 	p.grayscale = isBitSet(v, 0)
-	p.showBgLeft = isBitSet(v, 1)
+	p.showTilesLeft = isBitSet(v, 1)
 	p.showSpritesLeft = isBitSet(v, 2)
-	p.showBg = isBitSet(v, 3)
+	p.showTiles = isBitSet(v, 3)
 	p.showSprites = isBitSet(v, 4)
 	p.eRed = isBitSet(v, 5)
 	p.eGreen = isBitSet(v, 6)
