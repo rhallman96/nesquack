@@ -9,9 +9,6 @@ type NES interface {
 type nes struct {
 	cpu *cpu
 	ppu *ppu
-
-	cpuBus *cpuBus
-	ppuBus *ppuBus
 }
 
 // NewNES constructs a new NES
@@ -30,13 +27,11 @@ func NewNES(rom []uint8, drawer Drawer, c1 Controller) (NES, error) {
 
 	cpuBus := newCPUBus(ppu, cartridge, j1)
 	cpu, err := newCPU(cpuBus)
+	ppu.cpu = cpu
 
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO: investigate more elegant way of instantiating
-	ppu.cpu = cpu
 
 	return &nes{
 		cpu: cpu,

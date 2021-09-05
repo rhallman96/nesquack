@@ -186,3 +186,7 @@ func (c *mmc1) getCHRIndex(a uint16) int {
 	}
 	return int(a) - chrBankSize + (c.chrHighBank * chrBankSize)
 }
+
+func (c *mmc1) incScanline(cp *cpu) error {
+	return nil
+}

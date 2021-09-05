@@ -37,6 +37,9 @@ type cartridge interface {
 	readCHR(a uint16) (uint8, error)
 	writeCHR(a uint16, v uint8) error
 	vramMirror() mirrorMode
+
+	// used for mappers with scanline counters (mmc3)
+	incScanline(c *cpu) error
 }
 
 // createCartridge creates a cartridge based on the ROM's raw binary data.

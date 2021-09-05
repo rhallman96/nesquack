@@ -61,3 +61,7 @@ func (c *nrom) writeCHR(a uint16, v uint8) error {
 func (c *nrom) vramMirror() mirrorMode {
 	return c.mirror
 }
+
+func (c *nrom) incScanline(cp *cpu) error {
+	return nil
+}

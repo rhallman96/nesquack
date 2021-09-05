@@ -36,6 +36,14 @@ type mmc3 struct {
 	chrA12Inverted bool
 	irqEnabled     bool
 
+	// when set to true, triggers irq set to false
+	triggerIrqDisable bool
+
+	// scaline counter is not immediately reloaded
+	triggerReload bool
+
+	irqLatch, irqCounter uint8
+
 	mirror mirrorMode
 }
 
@@ -88,7 +96,12 @@ func (c *mmc3) write(a uint16, v uint8) error {
 		}
 		return c.writeIRQReload(v)
 	case a > mmc3PRGRomBank3High:
-		c.irqEnabled = ((a % 2) == 1)
+		if (a % 2) == 1 {
+			c.irqEnabled = true
+		} else {
+			c.irqEnabled = false
+			c.triggerIrqDisable = true
+		}
 	default:
 		return errors.New(fmt.Sprintf("oob mmc3 write at 0x%x", a))
 	}
@@ -137,12 +150,12 @@ func (c *mmc3) writeMirror(v uint8) error {
 }
 
 func (c *mmc3) writeIRQLatch(v uint8) error {
-	// TODO
+	c.irqLatch = v
 	return nil
 }
 
 func (c *mmc3) writeIRQReload(v uint8) error {
-	// TODO
+	c.triggerReload = true
 	return nil
 }
 
@@ -198,4 +211,21 @@ func (c *mmc3) getCHRIndexMMCRegisterOn(a uint16) int {
 	}
 
 	return (int(bank) * mmc3CHRBankSize) + int(offset)
+}
+
+func (c *mmc3) incScanline(cp *cpu) error {
+
+	if c.triggerReload || c.irqCounter == 0 {
+		c.irqCounter = c.irqLatch
+		c.triggerReload = false
+		cp.setIRQ(false)
+	} else {
+		c.irqCounter--
+	}
+
+	if c.irqCounter == 0 {
+		cp.setIRQ(c.irqEnabled)
+	}
+
+	return nil
 }

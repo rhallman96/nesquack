@@ -2,6 +2,7 @@ package system
 
 import (
 	"errors"
+	"fmt"
 )
 
 const (
@@ -18,6 +19,7 @@ const (
 
 	scanlineCount  = 262
 	dotCount       = 341
+	incScanlineDot = 260
 	postRenderLine = 240
 
 	maxSprites        = 8
@@ -76,15 +78,15 @@ type ppu struct {
 	// data read from vram is stored in a buffer
 	dataReadBuffer uint8
 
-	// whether or not a background tile was drawn at each dot
-	bgPixelDrawn []bool
+	// whether or not a pixel was drawn at each dot
+	tilePixelDrawn   [DrawWidth]bool
+	spritePixelDrawn [DrawWidth]bool
 }
 
 func newPPU(drawer Drawer, bus *ppuBus) *ppu {
 	return &ppu{
-		drawer:       drawer,
-		bus:          bus,
-		bgPixelDrawn: make([]bool, DrawWidth),
+		drawer: drawer,
+		bus:    bus,
 	}
 }
 
@@ -93,7 +95,6 @@ func (p *ppu) step(cpuCycles uint64) error {
 
 	for i := uint64(0); i < cycles; i++ {
 		p.dot++
-
 		if p.renderEnabled() {
 			if p.scanline == scanlineCount-1 {
 				// when rendering is enabled, the ppu skips an additional tick every odd frame
@@ -104,6 +105,10 @@ func (p *ppu) step(cpuCycles uint64) error {
 				if p.dot >= 280 && p.dot <= 304 {
 					p.copyScrollY()
 				}
+			}
+
+			if (p.dot == incScanlineDot) && (p.scanline <= DrawHeight) {
+				p.bus.cartridge.incScanline(p.cpu)
 			}
 		}
 
@@ -145,6 +150,7 @@ func (p *ppu) step(cpuCycles uint64) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -159,11 +165,13 @@ func (p *ppu) drawTiles() error {
 	}
 
 	for dot := 0; dot < DrawWidth; dot++ {
-		p.bgPixelDrawn[dot] = false
+		p.tilePixelDrawn[dot] = false
+		p.spritePixelDrawn[dot] = false
+
 		p.drawer.DrawPixel(dot, p.scanline, palette[bgColor])
 
 		// only draw the background color if tile rendering is disabled
-		if (!p.showTiles) || (!p.showTilesLeft && dot < 8) {
+		if !p.showTiles {
 			continue
 		}
 
@@ -179,6 +187,11 @@ func (p *ppu) drawTiles() error {
 		// increment coarse X every 8 pixels (done after loopyV scroll value is fetched)
 		if fineX == 7 {
 			p.incCoarseX()
+		}
+
+		if p.dot < 8 && !p.showTilesLeft {
+			fmt.Println("HERE")
+			continue
 		}
 
 		// get tile pixel color
@@ -209,7 +222,7 @@ func (p *ppu) drawTiles() error {
 			continue
 		}
 
-		p.bgPixelDrawn[dot] = true
+		p.tilePixelDrawn[dot] = true
 
 		// get tile palette
 		c, err := p.bus.read(attributeAddr)
@@ -261,7 +274,7 @@ func (p *ppu) drawSprites() error {
 
 	spriteCount := 0
 	// iterate over sprites in reverse, since earlier sprites are drawn with higher priority
-	for i := oamSize - 4; i >= 0; i -= 4 {
+	for i := 0; i <= oamSize-4; i += 4 {
 		if spriteCount == maxSprites {
 			break
 		}
@@ -331,9 +344,12 @@ func (p *ppu) drawSprites() error {
 				continue
 			}
 
-			if (i == 0) && (p.bgPixelDrawn[x+ix]) {
+			if (i == 0) && (p.tilePixelDrawn[x+ix]) {
 				p.spriteZeroHit = true
+			} else if p.spritePixelDrawn[x+ix] {
+				continue
 			}
+			p.spritePixelDrawn[x+ix] = true
 
 			var pIndex uint16 = spritePaletteAddr + uint16(pIndex*4) + uint16(cIndex)
 			color, err := p.bus.read(pIndex)
@@ -341,7 +357,7 @@ func (p *ppu) drawSprites() error {
 				return err
 			}
 
-			if inFront || !p.bgPixelDrawn[x+ix] {
+			if inFront || !p.tilePixelDrawn[x+ix] {
 				p.drawer.DrawPixel(x+ix, p.scanline, palette[color])
 			}
 		}
@@ -472,6 +488,11 @@ func (p *ppu) writeAddress(v uint8) {
 	if p.writeToggle {
 		p.loopyT &= 0xff00
 		p.loopyT |= uint16(v)
+
+		if p.loopyV&0x1000 == 0 && (p.loopyT&0x1000 != 0) {
+			p.bus.cartridge.incScanline(p.cpu)
+		}
+
 		p.loopyV = p.loopyT
 	} else {
 		p.loopyT &= 0xff
