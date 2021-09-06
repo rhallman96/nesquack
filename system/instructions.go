@@ -3,15 +3,16 @@ package system
 type operation func(c *cpu, bus memoryDevice, a uint16) error
 
 type instruction struct {
-	operation   operation
-	addressMode addressMode
-	cycles      uint64
+	operation         operation
+	addressMode       addressMode
+	cycles            uint64
+	addCyclePageCross bool
 }
 
 // execute modifies the state of the cpu and memory on behalf of an instruction
 func (i *instruction) execute(c *cpu) error {
 	c.pc++
-	a, err := i.addressMode(c, c.bus)
+	a, err := i.addressMode(c, c.bus, i.addCyclePageCross)
 	if err != nil {
 		return err
 	}
@@ -22,225 +23,225 @@ func (i *instruction) execute(c *cpu) error {
 // the 2A03 instruction set, excluding undocumented opcodes
 var instructionSet = [256]*instruction{
 	// ADC
-	0x69: {adc, immediate, 2},
-	0x65: {adc, zeroPage, 3},
-	0x75: {adc, zeroPageX, 4},
-	0x6d: {adc, absolute, 4},
-	0x7d: {adc, absoluteX, 4},
-	0x79: {adc, absoluteY, 4},
-	0x61: {adc, indirectX, 6},
-	0x71: {adc, indirectY, 5},
+	0x69: {adc, immediate, 2, false},
+	0x65: {adc, zeroPage, 3, false},
+	0x75: {adc, zeroPageX, 4, false},
+	0x6d: {adc, absolute, 4, false},
+	0x7d: {adc, absoluteX, 4, true},
+	0x79: {adc, absoluteY, 4, true},
+	0x61: {adc, indirectX, 6, false},
+	0x71: {adc, indirectY, 5, true},
 
 	// AND
-	0x29: {and, immediate, 2},
-	0x25: {and, zeroPage, 3},
-	0x35: {and, zeroPageX, 4},
-	0x2d: {and, absolute, 4},
-	0x3d: {and, absoluteX, 4},
-	0x39: {and, absoluteY, 4},
-	0x21: {and, indirectX, 6},
-	0x31: {and, indirectY, 5},
+	0x29: {and, immediate, 2, false},
+	0x25: {and, zeroPage, 3, false},
+	0x35: {and, zeroPageX, 4, false},
+	0x2d: {and, absolute, 4, false},
+	0x3d: {and, absoluteX, 4, true},
+	0x39: {and, absoluteY, 4, true},
+	0x21: {and, indirectX, 6, false},
+	0x31: {and, indirectY, 5, true},
 
 	// ASL
-	0x0a: {aslAcc, accumulator, 2},
-	0x06: {asl, zeroPage, 5},
-	0x16: {asl, zeroPageX, 6},
-	0x0e: {asl, absolute, 6},
-	0x1e: {asl, absoluteX, 7},
+	0x0a: {aslAcc, accumulator, 2, false},
+	0x06: {asl, zeroPage, 5, false},
+	0x16: {asl, zeroPageX, 6, false},
+	0x0e: {asl, absolute, 6, false},
+	0x1e: {asl, absoluteX, 7, false},
 
 	// Branch
-	0x90: {bcc, relative, 2},
-	0xb0: {bcs, relative, 2},
-	0xf0: {beq, relative, 2},
-	0x30: {bmi, relative, 2},
-	0xd0: {bne, relative, 2},
-	0x10: {bpl, relative, 2},
-	0x50: {bvc, relative, 2},
-	0x70: {bvs, relative, 2},
+	0x90: {bcc, relative, 2, false},
+	0xb0: {bcs, relative, 2, false},
+	0xf0: {beq, relative, 2, false},
+	0x30: {bmi, relative, 2, false},
+	0xd0: {bne, relative, 2, false},
+	0x10: {bpl, relative, 2, false},
+	0x50: {bvc, relative, 2, false},
+	0x70: {bvs, relative, 2, false},
 
 	// BIT
-	0x24: {bit, zeroPage, 3},
-	0x2c: {bit, absolute, 4},
+	0x24: {bit, zeroPage, 3, false},
+	0x2c: {bit, absolute, 4, false},
 
 	// Break
-	0x00: {brk, implied, 7},
+	0x00: {brk, implied, 7, false},
 
 	// Clear
-	0x18: {clc, implied, 2},
-	0xd8: {cld, implied, 2},
-	0x58: {cli, implied, 2},
-	0xb8: {clv, implied, 2},
+	0x18: {clc, implied, 2, false},
+	0xd8: {cld, implied, 2, false},
+	0x58: {cli, implied, 2, false},
+	0xb8: {clv, implied, 2, false},
 
 	// CMP
-	0xc9: {cmp, immediate, 2},
-	0xc5: {cmp, zeroPage, 3},
-	0xd5: {cmp, zeroPageX, 4},
-	0xcd: {cmp, absolute, 4},
-	0xdd: {cmp, absoluteX, 4},
-	0xd9: {cmp, absoluteY, 4},
-	0xc1: {cmp, indirectX, 6},
-	0xd1: {cmp, indirectY, 5},
+	0xc9: {cmp, immediate, 2, false},
+	0xc5: {cmp, zeroPage, 3, false},
+	0xd5: {cmp, zeroPageX, 4, false},
+	0xcd: {cmp, absolute, 4, false},
+	0xdd: {cmp, absoluteX, 4, true},
+	0xd9: {cmp, absoluteY, 4, true},
+	0xc1: {cmp, indirectX, 6, false},
+	0xd1: {cmp, indirectY, 5, true},
 
 	// CPX
-	0xe0: {cpx, immediate, 2},
-	0xe4: {cpx, zeroPage, 3},
-	0xec: {cpx, absolute, 4},
+	0xe0: {cpx, immediate, 2, false},
+	0xe4: {cpx, zeroPage, 3, false},
+	0xec: {cpx, absolute, 4, false},
 
 	// CPY
-	0xc0: {cpy, immediate, 2},
-	0xc4: {cpy, zeroPage, 3},
-	0xcc: {cpy, absolute, 4},
+	0xc0: {cpy, immediate, 2, false},
+	0xc4: {cpy, zeroPage, 3, false},
+	0xcc: {cpy, absolute, 4, false},
 
 	// DEC
-	0xc6: {dec, zeroPage, 5},
-	0xd6: {dec, zeroPageX, 6},
-	0xce: {dec, absolute, 6},
-	0xde: {dec, absoluteX, 7},
+	0xc6: {dec, zeroPage, 5, false},
+	0xd6: {dec, zeroPageX, 6, false},
+	0xce: {dec, absolute, 6, false},
+	0xde: {dec, absoluteX, 7, false},
 
 	// Dec Registers
-	0xca: {dex, implied, 2},
-	0x88: {dey, implied, 2},
+	0xca: {dex, implied, 2, false},
+	0x88: {dey, implied, 2, false},
 
 	// EOR
-	0x49: {eor, immediate, 2},
-	0x45: {eor, zeroPage, 3},
-	0x55: {eor, zeroPageX, 4},
-	0x4d: {eor, absolute, 4},
-	0x5d: {eor, absoluteX, 4},
-	0x59: {eor, absoluteY, 4},
-	0x41: {eor, indirectX, 6},
-	0x51: {eor, indirectY, 5},
+	0x49: {eor, immediate, 2, false},
+	0x45: {eor, zeroPage, 3, false},
+	0x55: {eor, zeroPageX, 4, false},
+	0x4d: {eor, absolute, 4, false},
+	0x5d: {eor, absoluteX, 4, true},
+	0x59: {eor, absoluteY, 4, true},
+	0x41: {eor, indirectX, 6, false},
+	0x51: {eor, indirectY, 5, true},
 
 	// INC
-	0xe6: {inc, zeroPage, 5},
-	0xf6: {inc, zeroPageX, 6},
-	0xee: {inc, absolute, 6},
-	0xfe: {inc, absoluteX, 7},
+	0xe6: {inc, zeroPage, 5, false},
+	0xf6: {inc, zeroPageX, 6, false},
+	0xee: {inc, absolute, 6, false},
+	0xfe: {inc, absoluteX, 7, false},
 
 	// Inc Registers
-	0xe8: {inx, implied, 2},
-	0xc8: {iny, implied, 2},
+	0xe8: {inx, implied, 2, false},
+	0xc8: {iny, implied, 2, false},
 
 	// JMP
-	0x4c: {jmp, absolute, 3},
-	0x6c: {jmp, indirect, 5},
+	0x4c: {jmp, absolute, 3, false},
+	0x6c: {jmp, indirect, 5, false},
 
 	// JSR
-	0x20: {jsr, absolute, 6},
+	0x20: {jsr, absolute, 6, false},
 
 	// LDA
-	0xa9: {lda, immediate, 2},
-	0xa5: {lda, zeroPage, 3},
-	0xb5: {lda, zeroPageX, 4},
-	0xad: {lda, absolute, 4},
-	0xbd: {lda, absoluteX, 4},
-	0xb9: {lda, absoluteY, 4},
-	0xa1: {lda, indirectX, 6},
-	0xb1: {lda, indirectY, 5},
+	0xa9: {lda, immediate, 2, false},
+	0xa5: {lda, zeroPage, 3, false},
+	0xb5: {lda, zeroPageX, 4, false},
+	0xad: {lda, absolute, 4, false},
+	0xbd: {lda, absoluteX, 4, true},
+	0xb9: {lda, absoluteY, 4, true},
+	0xa1: {lda, indirectX, 6, false},
+	0xb1: {lda, indirectY, 5, true},
 
 	// LDX
-	0xa2: {ldx, immediate, 2},
-	0xa6: {ldx, zeroPage, 3},
-	0xb6: {ldx, zeroPageY, 4},
-	0xae: {ldx, absolute, 4},
-	0xbe: {ldx, absoluteY, 4},
+	0xa2: {ldx, immediate, 2, false},
+	0xa6: {ldx, zeroPage, 3, false},
+	0xb6: {ldx, zeroPageY, 4, false},
+	0xae: {ldx, absolute, 4, false},
+	0xbe: {ldx, absoluteY, 4, true},
 
 	// LDY
-	0xa0: {ldy, immediate, 2},
-	0xa4: {ldy, zeroPage, 3},
-	0xb4: {ldy, zeroPageX, 4},
-	0xac: {ldy, absolute, 4},
-	0xbc: {ldy, absoluteX, 4},
+	0xa0: {ldy, immediate, 2, false},
+	0xa4: {ldy, zeroPage, 3, false},
+	0xb4: {ldy, zeroPageX, 4, false},
+	0xac: {ldy, absolute, 4, false},
+	0xbc: {ldy, absoluteX, 4, true},
 
 	// LSR
-	0x4a: {lsrAcc, accumulator, 2},
-	0x46: {lsr, zeroPage, 5},
-	0x56: {lsr, zeroPageX, 6},
-	0x4e: {lsr, absolute, 6},
-	0x5e: {lsr, absoluteX, 7},
+	0x4a: {lsrAcc, accumulator, 2, false},
+	0x46: {lsr, zeroPage, 5, false},
+	0x56: {lsr, zeroPageX, 6, false},
+	0x4e: {lsr, absolute, 6, false},
+	0x5e: {lsr, absoluteX, 7, false},
 
 	// NOP
-	0xea: {nop, implied, 2},
+	0xea: {nop, implied, 2, false},
 
 	// ORA
-	0x09: {ora, immediate, 2},
-	0x05: {ora, zeroPage, 3},
-	0x15: {ora, zeroPageX, 4},
-	0x0d: {ora, absolute, 4},
-	0x1d: {ora, absoluteX, 4},
-	0x19: {ora, absoluteY, 4},
-	0x01: {ora, indirectX, 6},
-	0x11: {ora, indirectY, 5},
+	0x09: {ora, immediate, 2, false},
+	0x05: {ora, zeroPage, 3, false},
+	0x15: {ora, zeroPageX, 4, false},
+	0x0d: {ora, absolute, 4, false},
+	0x1d: {ora, absoluteX, 4, true},
+	0x19: {ora, absoluteY, 4, true},
+	0x01: {ora, indirectX, 6, false},
+	0x11: {ora, indirectY, 5, true},
 
 	// Push
-	0x48: {pha, implied, 3},
-	0x08: {php, implied, 3},
+	0x48: {pha, implied, 3, false},
+	0x08: {php, implied, 3, false},
 
 	// Pull
-	0x68: {pla, implied, 4},
-	0x28: {plp, implied, 4},
+	0x68: {pla, implied, 4, false},
+	0x28: {plp, implied, 4, false},
 
 	// ROL
-	0x2a: {rolAcc, accumulator, 2},
-	0x26: {rol, zeroPage, 5},
-	0x36: {rol, zeroPageX, 6},
-	0x2e: {rol, absolute, 6},
-	0x3e: {rol, absoluteX, 7},
+	0x2a: {rolAcc, accumulator, 2, false},
+	0x26: {rol, zeroPage, 5, false},
+	0x36: {rol, zeroPageX, 6, false},
+	0x2e: {rol, absolute, 6, false},
+	0x3e: {rol, absoluteX, 7, false},
 
 	// ROR
-	0x6a: {rorAcc, accumulator, 2},
-	0x66: {ror, zeroPage, 5},
-	0x76: {ror, zeroPageX, 6},
-	0x6e: {ror, absolute, 6},
-	0x7e: {ror, absoluteX, 7},
+	0x6a: {rorAcc, accumulator, 2, false},
+	0x66: {ror, zeroPage, 5, false},
+	0x76: {ror, zeroPageX, 6, false},
+	0x6e: {ror, absolute, 6, false},
+	0x7e: {ror, absoluteX, 7, false},
 
 	// RTI
-	0x40: {rti, implied, 6},
+	0x40: {rti, implied, 6, false},
 
 	// RTS
-	0x60: {rts, implied, 6},
+	0x60: {rts, implied, 6, false},
 
 	// SBC
-	0xe9: {sbc, immediate, 2},
-	0xe5: {sbc, zeroPage, 3},
-	0xf5: {sbc, zeroPageX, 4},
-	0xed: {sbc, absolute, 4},
-	0xfd: {sbc, absoluteX, 4},
-	0xf9: {sbc, absoluteY, 4},
-	0xe1: {sbc, indirectX, 6},
-	0xf1: {sbc, indirectY, 5},
+	0xe9: {sbc, immediate, 2, false},
+	0xe5: {sbc, zeroPage, 3, false},
+	0xf5: {sbc, zeroPageX, 4, false},
+	0xed: {sbc, absolute, 4, false},
+	0xfd: {sbc, absoluteX, 4, true},
+	0xf9: {sbc, absoluteY, 4, true},
+	0xe1: {sbc, indirectX, 6, false},
+	0xf1: {sbc, indirectY, 5, true},
 
 	// Set flags
-	0x38: {sec, implied, 2},
-	0xf8: {sed, implied, 2},
-	0x78: {sei, implied, 2},
+	0x38: {sec, implied, 2, false},
+	0xf8: {sed, implied, 2, false},
+	0x78: {sei, implied, 2, false},
 
 	// STA
-	0x85: {sta, zeroPage, 3},
-	0x95: {sta, zeroPageX, 4},
-	0x8d: {sta, absolute, 4},
-	0x9d: {sta, absoluteX, 5},
-	0x99: {sta, absoluteY, 5},
-	0x81: {sta, indirectX, 6},
-	0x91: {sta, indirectY, 6},
+	0x85: {sta, zeroPage, 3, false},
+	0x95: {sta, zeroPageX, 4, false},
+	0x8d: {sta, absolute, 4, false},
+	0x9d: {sta, absoluteX, 5, false},
+	0x99: {sta, absoluteY, 5, false},
+	0x81: {sta, indirectX, 6, false},
+	0x91: {sta, indirectY, 6, false},
 
 	// STX
-	0x86: {stx, zeroPage, 3},
-	0x96: {stx, zeroPageY, 4},
-	0x8e: {stx, absolute, 4},
+	0x86: {stx, zeroPage, 3, false},
+	0x96: {stx, zeroPageY, 4, false},
+	0x8e: {stx, absolute, 4, false},
 
 	// STY
-	0x84: {sty, zeroPage, 3},
-	0x94: {sty, zeroPageX, 4},
-	0x8c: {sty, absolute, 4},
+	0x84: {sty, zeroPage, 3, false},
+	0x94: {sty, zeroPageX, 4, false},
+	0x8c: {sty, absolute, 4, false},
 
 	// Transfers
-	0xaa: {tax, implied, 2},
-	0xa8: {tay, implied, 2},
-	0xba: {tsx, implied, 2},
-	0x8a: {txa, implied, 2},
-	0x9a: {txs, implied, 2},
-	0x98: {tya, implied, 2},
+	0xaa: {tax, implied, 2, false},
+	0xa8: {tay, implied, 2, false},
+	0xba: {tsx, implied, 2, false},
+	0x8a: {txa, implied, 2, false},
+	0x9a: {txs, implied, 2, false},
+	0x98: {tya, implied, 2, false},
 }
 
 func adc(c *cpu, bus memoryDevice, a uint16) error {
