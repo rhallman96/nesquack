@@ -114,10 +114,11 @@ func createCartridge(rom []uint8) (cartridge, error) {
 		}
 	case mmc3Header:
 		c = &mmc3{
-			prgROM: prgROM,
-			prgRAM: prgRAM,
-			chr:    chr,
-			mirror: ciMirror,
+			prgROM:      prgROM,
+			prgRAM:      prgRAM,
+			chr:         chr,
+			mirror:      ciMirror,
+			mmcRegister: true,
 		}
 	default:
 		return nil, errors.New(fmt.Sprintf("unsupported iNES mapper 0x%x", mapper))

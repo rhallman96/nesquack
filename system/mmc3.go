@@ -214,7 +214,6 @@ func (c *mmc3) getCHRIndexMMCRegisterOn(a uint16) int {
 }
 
 func (c *mmc3) incScanline(cp *cpu) error {
-
 	if c.triggerReload || c.irqCounter == 0 {
 		c.irqCounter = c.irqLatch
 		c.triggerReload = false

@@ -2,7 +2,6 @@ package system
 
 import (
 	"errors"
-	"fmt"
 )
 
 const (
@@ -107,7 +106,7 @@ func (p *ppu) step(cpuCycles uint64) error {
 				}
 			}
 
-			if (p.dot == incScanlineDot) && (p.scanline <= DrawHeight) {
+			if (p.dot == incScanlineDot) && (p.scanline == scanlineCount-1 || p.scanline < DrawHeight) {
 				p.bus.cartridge.incScanline(p.cpu)
 			}
 		}
@@ -189,8 +188,7 @@ func (p *ppu) drawTiles() error {
 			p.incCoarseX()
 		}
 
-		if p.dot < 8 && !p.showTilesLeft {
-			fmt.Println("HERE")
+		if dot < 8 && !p.showTilesLeft {
 			continue
 		}
 
@@ -340,7 +338,7 @@ func (p *ppu) drawSprites() error {
 			}
 
 			// pixels with a zero value are transparent
-			if cIndex == 0 {
+			if cIndex == 0 || (!p.showSpritesLeft && (x+ix < 8)) {
 				continue
 			}
 
@@ -488,11 +486,6 @@ func (p *ppu) writeAddress(v uint8) {
 	if p.writeToggle {
 		p.loopyT &= 0xff00
 		p.loopyT |= uint16(v)
-
-		if p.loopyV&0x1000 == 0 && (p.loopyT&0x1000 != 0) {
-			p.bus.cartridge.incScanline(p.cpu)
-		}
-
 		p.loopyV = p.loopyT
 	} else {
 		p.loopyT &= 0xff
